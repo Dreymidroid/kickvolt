@@ -1,10 +1,13 @@
-import 'package:material_ui/material_ui.dart';
+import 'dart:math' as math;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/audio_math/overview.dart';
 import '../../../../shared/shared.dart';
+import '../../../projects/projects.dart';
 import '../../bloc/beat_editor_cubit.dart';
-import '../../domain/entities/beat.dart';
 import 'timeline_painter.dart';
 
 /// Zoomable waveform: pinch to zoom, drag to scrub under the fixed playhead.
@@ -17,14 +20,18 @@ class BeatTimeline extends HookWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<BeatEditorCubit>();
     final zoomAtStart = useRef(state.zoom);
-    final scrubMs = useRef(0.0);
+    final scrubSample = useRef(0.0);
+    final overview = Overview(binFrames: state.binFrames, bins: state.overview);
 
     return Semantics(
       label: 'Waveform. Tap a marker to edit it. Pinch to zoom, drag to scrub.',
       child: LayoutBuilder(
         builder: (context, c) {
           final width = c.maxWidth;
-          final pxPerMs = state.zoom * kPxPerSecondAt1x / 1000;
+          final pxPerSample =
+              state.zoom *
+              kPxPerSecondAt1x /
+              math.max(1, state.project.sampleRate);
           final selected = state.selectedIndex;
           return Stack(
             children: [
@@ -34,7 +41,7 @@ class BeatTimeline extends HookWidget {
                   onTapUp: (d) => cubit.selectBeat(
                     TimelinePainter.beatAt(
                       project: state.project,
-                      playheadMs: state.playheadMs,
+                      playheadSample: state.playheadSample,
                       zoom: state.zoom,
                       dx: d.localPosition.dx,
                       dy: d.localPosition.dy,
@@ -43,21 +50,22 @@ class BeatTimeline extends HookWidget {
                   ),
                   onScaleStart: (_) {
                     zoomAtStart.value = state.zoom;
-                    scrubMs.value = state.playheadMs.toDouble();
+                    scrubSample.value = state.playheadSample.toDouble();
                   },
                   onScaleUpdate: (d) {
                     if (d.pointerCount > 1) {
                       cubit.setZoom(zoomAtStart.value * d.scale);
                       return;
                     }
-                    scrubMs.value -= d.focalPointDelta.dx / pxPerMs;
-                    cubit.seekTo(scrubMs.value.round());
+                    scrubSample.value -= d.focalPointDelta.dx / pxPerSample;
+                    cubit.seekTo(scrubSample.value.round());
                   },
                   child: CustomPaint(
                     size: Size.infinite,
                     painter: TimelinePainter(
                       project: state.project,
-                      playheadMs: state.playheadMs,
+                      overview: overview,
+                      playheadSample: state.playheadSample,
                       zoom: state.zoom,
                       colors: context.kv,
                       selectedIndex: selected,
@@ -65,7 +73,10 @@ class BeatTimeline extends HookWidget {
                   ),
                 ),
               ),
-              if (selected != null) _cardFor(context, selected, width, pxPerMs),
+              if (selected != null &&
+                  selected >= 0 &&
+                  selected < state.project.beats.length)
+                _cardFor(context, selected, width, pxPerSample),
             ],
           );
         },
@@ -77,10 +88,10 @@ class BeatTimeline extends HookWidget {
     BuildContext context,
     int index,
     double width,
-    double pxPerMs,
+    double pxPerSample,
   ) {
     final beat = state.project.beats[index];
-    final x = width / 2 + (beat.timeMs - state.playheadMs) * pxPerMs;
+    final x = width / 2 + (beat.sample - state.playheadSample) * pxPerSample;
     // Hide the card once its marker has been scrubbed off screen.
     if (x < -20 || x > width + 20) return const SizedBox.shrink();
     return Positioned(
@@ -92,7 +103,8 @@ class BeatTimeline extends HookWidget {
         child: BeatInfoCard(
           number: index + 1,
           beat: beat,
-          snapped: state.project.isOnGrid(beat.timeMs),
+          timeMs: state.project.sampleToMs(beat.sample),
+          snapped: state.project.isOnGrid(beat.sample),
         ),
       ),
     );
@@ -105,11 +117,13 @@ class BeatInfoCard extends StatelessWidget {
     super.key,
     required this.number,
     required this.beat,
+    required this.timeMs,
     required this.snapped,
   });
 
   final int number;
   final Beat beat;
+  final int timeMs;
   final bool snapped;
 
   @override
@@ -117,7 +131,7 @@ class BeatInfoCard extends StatelessWidget {
     final kv = context.kv;
     final haptic = switch (beat.type) {
       BeatType.beat => null,
-      BeatType.strong => 'tick',
+      BeatType.strong || BeatType.downbeat => 'tick',
       BeatType.drop => 'thud',
     };
     return Container(
@@ -143,7 +157,7 @@ class BeatInfoCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${formatClock(beat.timeMs, millis: true)}'
+                '${formatClock(timeMs, millis: true)}'
                 ' · ${snapped ? 'snapped' : 'off grid'}',
                 style: KvText.mono(size: 12, color: kv.text2),
               ),
@@ -174,6 +188,7 @@ String beatTypeLabel(BeatType t) => switch (t) {
   BeatType.beat => 'Beat',
   BeatType.strong => 'Strong',
   BeatType.drop => 'Drop',
+  BeatType.downbeat => 'Downbeat',
 };
 
 class OverviewStrip extends StatelessWidget {
@@ -189,10 +204,13 @@ class OverviewStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<BeatEditorCubit>();
-    final visibleMs = screenWidth / (state.zoom * kPxPerSecondAt1x / 1000);
+    final pxPerSample =
+        state.zoom * kPxPerSecondAt1x / math.max(1, state.project.sampleRate);
+    final visibleSamples = screenWidth / pxPerSample;
+    final overview = Overview(binFrames: state.binFrames, bins: state.overview);
 
     void seek(double x, double width) =>
-        cubit.seekTo((x / width * state.project.durationMs).round());
+        cubit.seekTo((x / width * state.project.sampleCount).round());
 
     return Semantics(
       label: 'Whole song overview',
@@ -205,8 +223,9 @@ class OverviewStrip extends StatelessWidget {
             size: Size(c.maxWidth, 32),
             painter: OverviewPainter(
               project: state.project,
-              playheadMs: state.playheadMs,
-              visibleMs: visibleMs,
+              overview: overview,
+              playheadSample: state.playheadSample,
+              visibleSamples: visibleSamples,
               colors: context.kv,
             ),
           ),

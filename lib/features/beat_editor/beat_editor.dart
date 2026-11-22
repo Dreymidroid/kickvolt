@@ -1,6 +1,8 @@
 export 'bloc/beat_editor_cubit.dart';
-export 'data/repositories/beat_project_repository.dart';
-export 'domain/entities/beat.dart';
-export 'domain/entities/beat_project.dart';
-export 'domain/entities/song_section.dart';
 export 'presentation/pages/beat_editor_screen.dart';
+export 'presentation/widgets/beat_inspector_panel.dart';
+export 'presentation/widgets/beat_timeline.dart';
+export 'presentation/widgets/edit_panel.dart';
+export 'presentation/widgets/editor_controls.dart';
+export 'presentation/widgets/editor_top_bar.dart';
+export 'presentation/widgets/timeline_painter.dart';

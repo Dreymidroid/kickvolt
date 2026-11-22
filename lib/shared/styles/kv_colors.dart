@@ -1,7 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../../features/beat_editor/domain/entities/song_section.dart';
-
 /// Design tokens from design/kickvolt-design/HANDOFF.md.
 @immutable
 class KvColors extends ThemeExtension<KvColors> {
@@ -81,13 +79,6 @@ class KvColors extends ThemeExtension<KvColors> {
   List<BoxShadow> get primaryGlow => [
     BoxShadow(color: volt.withValues(alpha: 0.28), blurRadius: 28),
   ];
-
-  Color section(SectionKind kind) => switch (kind) {
-    SectionKind.intro || SectionKind.outro => sectionIntro,
-    SectionKind.verse => sectionVerse,
-    SectionKind.build => sectionBuild,
-    SectionKind.drop => sectionDrop,
-  };
 
   @override
   KvColors copyWith({

@@ -200,14 +200,15 @@ Overview decodeOverview(Uint8List bytes) {
 
 /// Max-preserving downsample of [overview] (or a raw bin list) to [count]
 /// values in `0..255` for the Home card thumbnail.
-List<int> thumbnail(
-  Object overview, [
-  int count = overviewThumbnailLength,
-]) {
+List<int> thumbnail(Object overview, [int count = overviewThumbnailLength]) {
   final List<int> bins = switch (overview) {
     Overview(:final bins) => bins,
     List<int>() => overview,
-    _ => throw ArgumentError.value(overview, 'overview', 'Expected Overview or List<int>'),
+    _ => throw ArgumentError.value(
+      overview,
+      'overview',
+      'Expected Overview or List<int>',
+    ),
   };
   if (count <= 0) return const <int>[];
   if (bins.isEmpty) return List<int>.filled(count, 0);

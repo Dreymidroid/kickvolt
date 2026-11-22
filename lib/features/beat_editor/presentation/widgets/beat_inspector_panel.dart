@@ -2,8 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
+import '../../../projects/projects.dart';
 import '../../bloc/beat_editor_cubit.dart';
-import '../../domain/entities/beat.dart';
 import 'beat_timeline.dart' show beatTypeLabel;
 import 'timeline_painter.dart' show formatClock;
 
@@ -14,12 +14,21 @@ class BeatInspectorPanel extends StatelessWidget {
 
   final BeatEditorReady state;
 
+  static const _inspectorTypes = [
+    BeatType.beat,
+    BeatType.strong,
+    BeatType.drop,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
     final index = state.selectedIndex!;
     final beat = state.project.beats[index];
+    final options = _inspectorTypes.contains(beat.type)
+        ? _inspectorTypes
+        : [..._inspectorTypes, beat.type];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -36,7 +45,7 @@ class BeatInspectorPanel extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Text(
-              formatClock(beat.timeMs, millis: true),
+              formatClock(state.project.sampleToMs(beat.sample), millis: true),
               style: KvText.mono(size: 13, color: kv.text2),
             ),
             const Spacer(),
@@ -60,7 +69,7 @@ class BeatInspectorPanel extends StatelessWidget {
         const SizedBox(height: 12),
         KvSegmented<BeatType>(
           semanticLabel: 'Beat type',
-          options: [for (final t in BeatType.values) (t, beatTypeLabel(t))],
+          options: [for (final t in options) (t, beatTypeLabel(t))],
           value: beat.type,
           onChanged: cubit.setSelectedType,
         ),

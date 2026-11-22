@@ -1,21 +1,65 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
 import '../../bloc/beat_editor_cubit.dart';
 
+const String kAutoDetectPlaceholderMessage =
+    'Beat detection arrives in the next update';
+
 /// Context panel for the Edit tab with no marker selected.
+/// When the project has 0 beats, renders the empty prompt from `EditorEmpty.png`.
 class EditPanel extends StatelessWidget {
   const EditPanel({super.key, required this.state, this.onRedetect});
 
   final BeatEditorReady state;
   final VoidCallback? onRedetect;
 
+  void _showDetectionPlaceholder(BuildContext context) {
+    if (onRedetect != null) {
+      onRedetect!();
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text(kAutoDetectPlaceholderMessage)),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
     final p = state.project;
+
+    if (p.beatCount == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          KvPrimaryButton(
+            label: 'Auto-detect beats',
+            icon: KvIcons.sparkle,
+            height: 56,
+            fontSize: 17,
+            onPressed: () => _showDetectionPlaceholder(context),
+          ),
+          const SizedBox(height: 10),
+          KvSecondaryButton(
+            label: 'Tap them in while it plays',
+            icon: KvIcons.tap,
+            onPressed: () => cubit.selectTool(EditorTool.tap),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'You can fine-tune every beat after.',
+            textAlign: TextAlign.center,
+            style: KvText.ui(size: 13, color: kv.text2),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -63,7 +107,7 @@ class EditPanel extends StatelessWidget {
               child: KvSecondaryButton(
                 label: 'Re-detect',
                 icon: KvIcons.sparkle,
-                onPressed: onRedetect,
+                onPressed: () => _showDetectionPlaceholder(context),
               ),
             ),
           ],

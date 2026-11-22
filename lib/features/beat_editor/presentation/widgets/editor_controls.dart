@@ -1,5 +1,5 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
 import '../../bloc/beat_editor_cubit.dart';
@@ -10,25 +10,27 @@ class EditorChipsRow extends StatelessWidget {
 
   final BeatEditorReady state;
 
+  static String _formatBpm(double bpm) =>
+      bpm == bpm.roundToDouble() ? '${bpm.round()}' : bpm.toStringAsFixed(1);
+
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
+    final bpm = state.project.bpm;
+    final bpmLabel = bpm == null ? '– BPM' : '${_formatBpm(bpm)} BPM';
+
     return SizedBox(
       height: 40,
       child: Row(
         children: [
-          KvChip(
-            label: '${state.project.bpm} BPM',
-            mono: true,
-            onPressed: () {},
-          ),
+          KvChip(label: bpmLabel, mono: true, onPressed: () {}),
           const SizedBox(width: 8),
           KvChip(
             label: 'Snap',
             icon: KvIcons.magnet,
-            active: state.snap,
-            onPressed: cubit.toggleSnap,
+            active: state.snap && bpm != null,
+            onPressed: bpm == null ? null : cubit.toggleSnap,
           ),
           const SizedBox(width: 8),
           KvChip(

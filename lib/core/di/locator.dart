@@ -1,9 +1,9 @@
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../features/beat_editor/data/repositories/beat_project_repository.dart';
 import '../../features/import/data/datasources/source_picker.dart';
 import '../../features/import/data/repositories/import_repository.dart';
+import '../../features/projects/data/repositories/project_repository.dart';
 import '../audio_native/audio_native_client.dart';
 import '../storage/project_paths.dart';
 
@@ -26,7 +26,7 @@ void setupLocator() {
       paths: () => locator<Future<ProjectPaths>>(),
     ),
   );
-  locator.registerLazySingleton<BeatProjectRepository>(
-    DemoBeatProjectRepository.new,
+  locator.registerLazySingleton<ProjectRepository>(
+    () => ProjectRepositoryImpl(paths: () => locator<Future<ProjectPaths>>()),
   );
 }

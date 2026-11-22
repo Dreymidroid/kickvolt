@@ -1,8 +1,9 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
 import '../../bloc/beat_editor_cubit.dart';
+import 'timeline_painter.dart' show formatClock;
 
 class EditorTopBar extends StatelessWidget {
   const EditorTopBar({super.key, required this.state, this.onExport});
@@ -10,11 +11,20 @@ class EditorTopBar extends StatelessWidget {
   final BeatEditorReady state;
   final VoidCallback? onExport;
 
+  static String _formatBpm(double bpm) =>
+      bpm == bpm.roundToDouble() ? '${bpm.round()}' : bpm.toStringAsFixed(1);
+
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
     final p = state.project;
+    final hasBeats = p.beatCount > 0;
+    final subtitle = hasBeats
+        ? '${p.beatCount} ${p.beatCount == 1 ? 'beat' : 'beats'} · '
+              '${p.bpm == null ? '– BPM' : '${_formatBpm(p.bpm!)} BPM'}'
+        : '${formatClock(p.durationMs)} · no beats yet';
+
     return SizedBox(
       height: 52,
       child: Padding(
@@ -33,7 +43,7 @@ class EditorTopBar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    p.name,
+                    p.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: KvText.ui(
@@ -43,10 +53,7 @@ class EditorTopBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 1),
-                  Text(
-                    '${p.beatCount} beats · ${p.bpm} BPM',
-                    style: KvText.mono(size: 12, color: kv.text2),
-                  ),
+                  Text(subtitle, style: KvText.mono(size: 12, color: kv.text2)),
                 ],
               ),
             ),
@@ -63,11 +70,11 @@ class EditorTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Material(
-              color: kv.volt,
+              color: hasBeats ? kv.volt : kv.surface2,
               shape: const StadiumBorder(),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: onExport,
+                onTap: hasBeats ? onExport : null,
                 child: Container(
                   height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -77,7 +84,7 @@ class EditorTopBar extends StatelessWidget {
                     style: KvText.ui(
                       size: 15,
                       weight: FontWeight.w700,
-                      color: kv.onVolt,
+                      color: hasBeats ? kv.onVolt : kv.text3,
                     ),
                   ),
                 ),

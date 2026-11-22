@@ -123,11 +123,11 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( BeatProject project,  int playheadMs,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( Project project,  Uint8List overview,  int binFrames,  int playheadSample,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack,  String? saveError)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading() when loading != null:
 return loading();case BeatEditorReady() when ready != null:
-return ready(_that.project,_that.playheadMs,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack);case BeatEditorError() when error != null:
+return ready(_that.project,_that.overview,_that.binFrames,_that.playheadSample,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack,_that.saveError);case BeatEditorError() when error != null:
 return error(_that.error);case _:
   return orElse();
 
@@ -146,11 +146,11 @@ return error(_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( BeatProject project,  int playheadMs,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack)  ready,required TResult Function( String error)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( Project project,  Uint8List overview,  int binFrames,  int playheadSample,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack,  String? saveError)  ready,required TResult Function( String error)  error,}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading():
 return loading();case BeatEditorReady():
-return ready(_that.project,_that.playheadMs,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack);case BeatEditorError():
+return ready(_that.project,_that.overview,_that.binFrames,_that.playheadSample,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack,_that.saveError);case BeatEditorError():
 return error(_that.error);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -165,11 +165,11 @@ return error(_that.error);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( BeatProject project,  int playheadMs,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( Project project,  Uint8List overview,  int binFrames,  int playheadSample,  double zoom,  bool snap,  bool clicks,  double speed,  bool playing,  EditorTool tool,  int? selectedIndex,  List<List<Beat>> undoStack,  List<List<Beat>> redoStack,  String? saveError)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading() when loading != null:
 return loading();case BeatEditorReady() when ready != null:
-return ready(_that.project,_that.playheadMs,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack);case BeatEditorError() when error != null:
+return ready(_that.project,_that.overview,_that.binFrames,_that.playheadSample,_that.zoom,_that.snap,_that.clicks,_that.speed,_that.playing,_that.tool,_that.selectedIndex,_that.undoStack,_that.redoStack,_that.saveError);case BeatEditorError() when error != null:
 return error(_that.error);case _:
   return null;
 
@@ -181,8 +181,8 @@ return error(_that.error);case _:
 /// @nodoc
 
 
-class BeatEditorLoading implements BeatEditorState {
-  const BeatEditorLoading();
+class BeatEditorLoading extends BeatEditorState {
+  const BeatEditorLoading(): super._();
   
 
 
@@ -213,12 +213,14 @@ String toString() {
 /// @nodoc
 
 
-class BeatEditorReady implements BeatEditorState {
-  const BeatEditorReady({required this.project, this.playheadMs = 0, this.zoom = 4.0, this.snap = true, this.clicks = false, this.speed = 1.0, this.playing = false, this.tool = EditorTool.edit, this.selectedIndex,  List<List<Beat>> undoStack = const <List<Beat>>[],  List<List<Beat>> redoStack = const <List<Beat>>[]}): _undoStack = undoStack,_redoStack = redoStack;
+class BeatEditorReady extends BeatEditorState {
+  const BeatEditorReady({required this.project, required this.overview, required this.binFrames, this.playheadSample = 0, this.zoom = 4.0, this.snap = true, this.clicks = false, this.speed = 1.0, this.playing = false, this.tool = EditorTool.edit, this.selectedIndex,  List<List<Beat>> undoStack = const <List<Beat>>[],  List<List<Beat>> redoStack = const <List<Beat>>[], this.saveError}): _undoStack = undoStack,_redoStack = redoStack,super._();
   
 
- final  BeatProject project;
-@JsonKey() final  int playheadMs;
+ final  Project project;
+ final  Uint8List overview;
+ final  int binFrames;
+@JsonKey() final  int playheadSample;
 /// 1× fits ~30 s on screen; the design's default is 4×.
 @JsonKey() final  double zoom;
 @JsonKey() final  bool snap;
@@ -242,6 +244,8 @@ class BeatEditorReady implements BeatEditorState {
   return EqualUnmodifiableListView(_redoStack);
 }
 
+/// Latest non-fatal save error, surfaced as a SnackBar without losing edits.
+ final  String? saveError;
 
 /// Create a copy of BeatEditorState
 /// with the given fields replaced by the non-null parameter values.
@@ -253,18 +257,18 @@ $BeatEditorReadyCopyWith<BeatEditorReady> get copyWith => _$BeatEditorReadyCopyW
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is BeatEditorReady&&(identical(other.project, project) || other.project == project)&&(identical(other.playheadMs, playheadMs) || other.playheadMs == playheadMs)&&(identical(other.zoom, zoom) || other.zoom == zoom)&&(identical(other.snap, snap) || other.snap == snap)&&(identical(other.clicks, clicks) || other.clicks == clicks)&&(identical(other.speed, speed) || other.speed == speed)&&(identical(other.playing, playing) || other.playing == playing)&&(identical(other.tool, tool) || other.tool == tool)&&(identical(other.selectedIndex, selectedIndex) || other.selectedIndex == selectedIndex)&&const DeepCollectionEquality().equals(other.undoStack, _undoStack)&&const DeepCollectionEquality().equals(other.redoStack, _redoStack));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BeatEditorReady&&(identical(other.project, project) || other.project == project)&&const DeepCollectionEquality().equals(other.overview, overview)&&(identical(other.binFrames, binFrames) || other.binFrames == binFrames)&&(identical(other.playheadSample, playheadSample) || other.playheadSample == playheadSample)&&(identical(other.zoom, zoom) || other.zoom == zoom)&&(identical(other.snap, snap) || other.snap == snap)&&(identical(other.clicks, clicks) || other.clicks == clicks)&&(identical(other.speed, speed) || other.speed == speed)&&(identical(other.playing, playing) || other.playing == playing)&&(identical(other.tool, tool) || other.tool == tool)&&(identical(other.selectedIndex, selectedIndex) || other.selectedIndex == selectedIndex)&&const DeepCollectionEquality().equals(other.undoStack, _undoStack)&&const DeepCollectionEquality().equals(other.redoStack, _redoStack)&&(identical(other.saveError, saveError) || other.saveError == saveError));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,project,playheadMs,zoom,snap,clicks,speed,playing,tool,selectedIndex,const DeepCollectionEquality().hash(_undoStack),const DeepCollectionEquality().hash(_redoStack));
+    return Object.hash(runtimeType,project,const DeepCollectionEquality().hash(overview),binFrames,playheadSample,zoom,snap,clicks,speed,playing,tool,selectedIndex,const DeepCollectionEquality().hash(_undoStack),const DeepCollectionEquality().hash(_redoStack),saveError);
 }
 
 @override
 String toString() {
-    return 'BeatEditorState.ready(project: $project, playheadMs: $playheadMs, zoom: $zoom, snap: $snap, clicks: $clicks, speed: $speed, playing: $playing, tool: $tool, selectedIndex: $selectedIndex, undoStack: $undoStack, redoStack: $redoStack)';
+    return 'BeatEditorState.ready(project: $project, overview: $overview, binFrames: $binFrames, playheadSample: $playheadSample, zoom: $zoom, snap: $snap, clicks: $clicks, speed: $speed, playing: $playing, tool: $tool, selectedIndex: $selectedIndex, undoStack: $undoStack, redoStack: $redoStack, saveError: $saveError)';
 }
 
 
@@ -275,11 +279,11 @@ abstract mixin class $BeatEditorReadyCopyWith<$Res> implements $BeatEditorStateC
   factory $BeatEditorReadyCopyWith(BeatEditorReady value, $Res Function(BeatEditorReady) _then) = _$BeatEditorReadyCopyWithImpl;
 @useResult
 $Res call({
- BeatProject project, int playheadMs, double zoom, bool snap, bool clicks, double speed, bool playing, EditorTool tool, int? selectedIndex, List<List<Beat>> undoStack, List<List<Beat>> redoStack
+ Project project, Uint8List overview, int binFrames, int playheadSample, double zoom, bool snap, bool clicks, double speed, bool playing, EditorTool tool, int? selectedIndex, List<List<Beat>> undoStack, List<List<Beat>> redoStack, String? saveError
 });
 
 
-$BeatProjectCopyWith<$Res> get project;
+$ProjectCopyWith<$Res> get project;
 
 }
 /// @nodoc
@@ -292,10 +296,12 @@ class _$BeatEditorReadyCopyWithImpl<$Res>
 
 /// Create a copy of BeatEditorState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? playheadMs = null,Object? zoom = null,Object? snap = null,Object? clicks = null,Object? speed = null,Object? playing = null,Object? tool = null,Object? selectedIndex = freezed,Object? undoStack = null,Object? redoStack = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? overview = null,Object? binFrames = null,Object? playheadSample = null,Object? zoom = null,Object? snap = null,Object? clicks = null,Object? speed = null,Object? playing = null,Object? tool = null,Object? selectedIndex = freezed,Object? undoStack = null,Object? redoStack = null,Object? saveError = freezed,}) {
   return _then(BeatEditorReady(
 project: null == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
-as BeatProject,playheadMs: null == playheadMs ? _self.playheadMs : playheadMs // ignore: cast_nullable_to_non_nullable
+as Project,overview: null == overview ? _self.overview : overview // ignore: cast_nullable_to_non_nullable
+as Uint8List,binFrames: null == binFrames ? _self.binFrames : binFrames // ignore: cast_nullable_to_non_nullable
+as int,playheadSample: null == playheadSample ? _self.playheadSample : playheadSample // ignore: cast_nullable_to_non_nullable
 as int,zoom: null == zoom ? _self.zoom : zoom // ignore: cast_nullable_to_non_nullable
 as double,snap: null == snap ? _self.snap : snap // ignore: cast_nullable_to_non_nullable
 as bool,clicks: null == clicks ? _self.clicks : clicks // ignore: cast_nullable_to_non_nullable
@@ -305,7 +311,8 @@ as bool,tool: null == tool ? _self.tool : tool // ignore: cast_nullable_to_non_n
 as EditorTool,selectedIndex: freezed == selectedIndex ? _self.selectedIndex : selectedIndex // ignore: cast_nullable_to_non_nullable
 as int?,undoStack: null == undoStack ? _self._undoStack : undoStack // ignore: cast_nullable_to_non_nullable
 as List<List<Beat>>,redoStack: null == redoStack ? _self._redoStack : redoStack // ignore: cast_nullable_to_non_nullable
-as List<List<Beat>>,
+as List<List<Beat>>,saveError: freezed == saveError ? _self.saveError : saveError // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -313,9 +320,9 @@ as List<List<Beat>>,
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
-$BeatProjectCopyWith<$Res> get project {
+$ProjectCopyWith<$Res> get project {
   
-  return $BeatProjectCopyWith<$Res>(_self.project, (value) {
+  return $ProjectCopyWith<$Res>(_self.project, (value) {
     return _then(_self.copyWith(project: value));
   });
 }
@@ -324,8 +331,8 @@ $BeatProjectCopyWith<$Res> get project {
 /// @nodoc
 
 
-class BeatEditorError implements BeatEditorState {
-  const BeatEditorError({required this.error});
+class BeatEditorError extends BeatEditorState {
+  const BeatEditorError({required this.error}): super._();
   
 
  final  String error;

@@ -31,29 +31,32 @@ void main() {
       ..writeAsBytesSync([...header, ...pcm.buffer.asUint8List()]);
   }
 
-  test('computes mono overview with odd final bin and scales to 0..255', () async {
-    // sampleRate = 1000 Hz => binFrames = round(1000 / 100) = 10 frames/bin.
-    // 23 frames => 3 bins (10, 10, 3).
-    final samples = <int>[
-      // Bin 0: max abs is 16384 => (16384 * 255) ~/ 32767 = 127
-      0, -16384, 100, 200, 0, 0, 0, 0, 0, 0,
-      // Bin 1: max abs is 32767 => 255
-      1000, -32767, 0, 0, 0, 0, 0, 0, 0, 0,
-      // Bin 2 (odd final bin, 3 frames): max abs is 32768 (-32768) => 255
-      0, -32768, 50,
-    ];
-    final wav = writeWav(
-      'mono.wav',
-      sampleRate: 1000,
-      channels: 1,
-      samples: samples,
-    );
+  test(
+    'computes mono overview with odd final bin and scales to 0..255',
+    () async {
+      // sampleRate = 1000 Hz => binFrames = round(1000 / 100) = 10 frames/bin.
+      // 23 frames => 3 bins (10, 10, 3).
+      final samples = <int>[
+        // Bin 0: max abs is 16384 => (16384 * 255) ~/ 32767 = 127
+        0, -16384, 100, 200, 0, 0, 0, 0, 0, 0,
+        // Bin 1: max abs is 32767 => 255
+        1000, -32767, 0, 0, 0, 0, 0, 0, 0, 0,
+        // Bin 2 (odd final bin, 3 frames): max abs is 32768 (-32768) => 255
+        0, -32768, 50,
+      ];
+      final wav = writeWav(
+        'mono.wav',
+        sampleRate: 1000,
+        channels: 1,
+        samples: samples,
+      );
 
-    final ov = await computeOverview(wav.path, maxChunkBytes: 16);
-    expect(ov.binFrames, 10);
-    expect(ov.binCount, 3);
-    expect(ov.bins, [(16384 * 255) ~/ 32767, 255, 255]);
-  });
+      final ov = await computeOverview(wav.path, maxChunkBytes: 16);
+      expect(ov.binFrames, 10);
+      expect(ov.binCount, 3);
+      expect(ov.bins, [(16384 * 255) ~/ 32767, 255, 255]);
+    },
+  );
 
   test('computes stereo overview taking max-abs across both channels', () async {
     // 44100 Hz => binFrames = 441.

@@ -69,11 +69,16 @@ class AnalyzingRouteArgs {
 class BeatEditorRoute extends PageRouteInfo<BeatEditorRouteArgs> {
   BeatEditorRoute({
     Key? key,
-    String projectId = 'demo',
+    required String projectId,
+    BeatEditorCubit? cubit,
     List<PageRouteInfo>? children,
   }) : super(
          BeatEditorRoute.name,
-         args: BeatEditorRouteArgs(key: key, projectId: projectId),
+         args: BeatEditorRouteArgs(
+           key: key,
+           projectId: projectId,
+           cubit: cubit,
+         ),
          rawPathParams: {'id': projectId},
          initialChildren: children,
        );
@@ -86,48 +91,103 @@ class BeatEditorRoute extends PageRouteInfo<BeatEditorRouteArgs> {
       final pathParams = data.inheritedPathParams;
       final args = data.argsAs<BeatEditorRouteArgs>(
         orElse: () =>
-            BeatEditorRouteArgs(projectId: pathParams.getString('id', 'demo')),
+            BeatEditorRouteArgs(projectId: pathParams.getString('id')),
       );
-      return BeatEditorScreen(key: args.key, projectId: args.projectId);
+      return BeatEditorScreen(
+        key: args.key,
+        projectId: args.projectId,
+        cubit: args.cubit,
+      );
     },
   );
 }
 
 class BeatEditorRouteArgs {
-  const BeatEditorRouteArgs({this.key, this.projectId = 'demo'});
+  const BeatEditorRouteArgs({this.key, required this.projectId, this.cubit});
 
   final Key? key;
 
   final String projectId;
 
+  final BeatEditorCubit? cubit;
+
   @override
   String toString() {
-    return 'BeatEditorRouteArgs{key: $key, projectId: $projectId}';
+    return 'BeatEditorRouteArgs{key: $key, projectId: $projectId, cubit: $cubit}';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! BeatEditorRouteArgs) return false;
-    return key == other.key && projectId == other.projectId;
+    return key == other.key &&
+        projectId == other.projectId &&
+        cubit == other.cubit;
   }
 
   @override
-  int get hashCode => key.hashCode ^ projectId.hashCode;
+  int get hashCode => key.hashCode ^ projectId.hashCode ^ cubit.hashCode;
 }
 
 /// generated route for
 /// [HomeScreen]
-class HomeRoute extends PageRouteInfo<void> {
-  const HomeRoute({List<PageRouteInfo>? children})
-    : super(HomeRoute.name, initialChildren: children);
+class HomeRoute extends PageRouteInfo<HomeRouteArgs> {
+  HomeRoute({
+    Key? key,
+    ProjectsCubit? projectsCubit,
+    SourcePickerCubit? pickerCubit,
+    List<PageRouteInfo>? children,
+  }) : super(
+         HomeRoute.name,
+         args: HomeRouteArgs(
+           key: key,
+           projectsCubit: projectsCubit,
+           pickerCubit: pickerCubit,
+         ),
+         initialChildren: children,
+       );
 
   static const String name = 'HomeRoute';
 
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const HomeScreen();
+      final args = data.argsAs<HomeRouteArgs>(
+        orElse: () => const HomeRouteArgs(),
+      );
+      return HomeScreen(
+        key: args.key,
+        projectsCubit: args.projectsCubit,
+        pickerCubit: args.pickerCubit,
+      );
     },
   );
+}
+
+class HomeRouteArgs {
+  const HomeRouteArgs({this.key, this.projectsCubit, this.pickerCubit});
+
+  final Key? key;
+
+  final ProjectsCubit? projectsCubit;
+
+  final SourcePickerCubit? pickerCubit;
+
+  @override
+  String toString() {
+    return 'HomeRouteArgs{key: $key, projectsCubit: $projectsCubit, pickerCubit: $pickerCubit}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! HomeRouteArgs) return false;
+    return key == other.key &&
+        projectsCubit == other.projectsCubit &&
+        pickerCubit == other.pickerCubit;
+  }
+
+  @override
+  int get hashCode =>
+      key.hashCode ^ projectsCubit.hashCode ^ pickerCubit.hashCode;
 }
