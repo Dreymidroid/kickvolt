@@ -1,1 +1,15 @@
+export 'bloc/projects_cubit.dart';
+export 'data/mappers/project_mapper.dart';
+export 'data/models/project_model.dart';
+export 'data/repositories/project_repository.dart';
+export 'domain/entities/beat.dart';
+export 'domain/entities/detection_settings.dart';
+export 'domain/entities/project.dart';
+export 'domain/entities/project_exception.dart';
+export 'domain/entities/project_source.dart';
+export 'domain/entities/project_summary.dart';
+export 'domain/entities/section.dart';
 export 'presentation/pages/home_screen.dart';
+export 'presentation/widgets/edited_label.dart';
+export 'presentation/widgets/project_card.dart';
+export 'presentation/widgets/project_dialogs.dart';

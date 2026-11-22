@@ -6,24 +6,69 @@ import '../../../../app/app_constants.dart';
 import '../../../../app/app_router.dart';
 import '../../../../shared/shared.dart';
 import '../../../import/import.dart';
+import '../../bloc/projects_cubit.dart';
+import '../../domain/entities/project_summary.dart';
+import '../widgets/project_card.dart';
+import '../widgets/project_dialogs.dart';
 
-/// Projects home. Until M2 there are no saved projects, so this is the
-/// empty state with the import entry point.
+/// Projects home: shows saved beat packs (newest first) or the empty state
+/// when no projects exist yet.
 @RoutePage()
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.projectsCubit, this.pickerCubit});
+
+  final ProjectsCubit? projectsCubit;
+  final SourcePickerCubit? pickerCubit;
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => SourcePickerCubit(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => pickerCubit ?? SourcePickerCubit()),
+        BlocProvider(create: (_) => projectsCubit ?? (ProjectsCubit()..load())),
+      ],
       child: const HomeView(),
     );
   }
 }
 
-class HomeView extends StatelessWidget {
+class HomeView extends StatefulWidget {
   const HomeView({super.key});
+
+  @override
+  State<HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<HomeView> {
+  StackRouter? _router;
+  bool _wasTopRoute = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final router = AutoRouter.of(context);
+    if (_router != router) {
+      _router?.navigationHistory.removeListener(_onNavigationChanged);
+      _router = router;
+      _wasTopRoute = router.current.name == HomeRoute.name;
+      router.navigationHistory.addListener(_onNavigationChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    _router?.navigationHistory.removeListener(_onNavigationChanged);
+    super.dispose();
+  }
+
+  void _onNavigationChanged() {
+    if (!mounted) return;
+    final isTop = _router?.current.name == HomeRoute.name;
+    if (isTop && !_wasTopRoute) {
+      context.read<ProjectsCubit>().load();
+    }
+    _wasTopRoute = isTop;
+  }
 
   Future<void> _onPickerState(
     BuildContext context,
@@ -36,6 +81,8 @@ class HomeView extends StatelessWidget {
         final failure = await context.router.push<ImportFailure?>(
           AnalyzingRoute(source: source),
         );
+        if (!context.mounted) return;
+        await context.read<ProjectsCubit>().load();
         if (failure != null && context.mounted) {
           await _showError(context, failure);
         }
@@ -80,6 +127,43 @@ class HomeView extends StatelessWidget {
     }
   }
 
+  Future<void> _openProject(
+    BuildContext context,
+    ProjectSummary summary,
+  ) async {
+    await context.router.push(BeatEditorRoute(projectId: summary.id));
+    if (context.mounted) {
+      await context.read<ProjectsCubit>().load();
+    }
+  }
+
+  Future<void> _onCardLongPress(
+    BuildContext context,
+    ProjectSummary summary,
+  ) async {
+    final action = await showProjectActionsSheet(context, summary);
+    if (!context.mounted || action == null) return;
+    final projectsCubit = context.read<ProjectsCubit>();
+    switch (action) {
+      case ProjectCardAction.rename:
+        final newTitle = await showRenameProjectDialog(
+          context,
+          currentTitle: summary.title,
+        );
+        if (newTitle != null && context.mounted) {
+          await projectsCubit.rename(summary.id, newTitle);
+        }
+      case ProjectCardAction.delete:
+        final confirmed = await showDeleteProjectDialog(
+          context,
+          title: summary.title,
+        );
+        if (confirmed && context.mounted) {
+          await projectsCubit.delete(summary.id);
+        }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
@@ -87,68 +171,226 @@ class HomeView extends StatelessWidget {
       listener: _onPickerState,
       child: Scaffold(
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                const SizedBox(height: 8),
-                const _Header(),
-                const Spacer(flex: 3),
-                _EmptyArt(onTap: () => _import(context)),
-                const SizedBox(height: 18),
-                Text(
-                  'No beat packs yet',
-                  textAlign: TextAlign.center,
-                  style: KvText.heading(size: 28),
-                ),
-                const SizedBox(height: 18),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 310),
-                  child: Text(
-                    'Import the song you’re editing to. We’ll find the beats, '
-                    'you fix the rest, then export a pack for CapCut or VN.',
-                    textAlign: TextAlign.center,
-                    style: KvText.ui(size: 16, color: kv.text2, height: 1.45),
+          child: BlocBuilder<ProjectsCubit, ProjectsState>(
+            builder: (context, state) => switch (state) {
+              ProjectsLoading() => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: _Header(),
                   ),
-                ),
-                const Spacer(flex: 4),
-                BlocBuilder<SourcePickerCubit, SourcePickerState>(
-                  builder: (context, state) => KvPrimaryButton(
-                    label: 'Import a song',
-                    icon: KvIcons.plus,
-                    height: 64,
-                    radius: 20,
-                    fontSize: 18,
-                    onPressed: state is SourcePickerBusy
-                        ? null
-                        : () => _import(context),
+                  Expanded(
+                    child: Center(
+                      child: CircularProgressIndicator(color: kv.volt),
+                    ),
                   ),
+                ],
+              ),
+              ProjectsError(:final error) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    const _Header(),
+                    const Spacer(),
+                    Text(
+                      error,
+                      textAlign: TextAlign.center,
+                      style: KvText.ui(size: 15, color: kv.error),
+                    ),
+                    const SizedBox(height: 16),
+                    KvSecondaryButton(
+                      label: 'Try again',
+                      onPressed: () => context.read<ProjectsCubit>().load(),
+                    ),
+                    const Spacer(),
+                    _ImportButton(onImport: () => _import(context)),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                // How-to guide arrives in M8.
-                SizedBox(
-                  height: 48,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      KvIcon(KvIcons.help, size: 20, color: kv.text3),
-                      const SizedBox(width: 8),
-                      Text(
-                        'How beat packs work',
-                        style: KvText.ui(
-                          size: 16,
-                          weight: FontWeight.w600,
-                          color: kv.text3,
-                        ),
+              ),
+              ProjectsLoaded(:final projects) =>
+                projects.isEmpty
+                    ? _EmptyHomeBody(onImport: () => _import(context))
+                    : _ProjectsListBody(
+                        projects: projects,
+                        onImport: () => _import(context),
+                        onOpenProject: (s) => _openProject(context, s),
+                        onLongPressProject: (s) => _onCardLongPress(context, s),
                       ),
-                    ],
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectsListBody extends StatelessWidget {
+  const _ProjectsListBody({
+    required this.projects,
+    required this.onImport,
+    required this.onOpenProject,
+    required this.onLongPressProject,
+  });
+
+  final List<ProjectSummary> projects;
+  final VoidCallback onImport;
+  final ValueChanged<ProjectSummary> onOpenProject;
+  final ValueChanged<ProjectSummary> onLongPressProject;
+
+  @override
+  Widget build(BuildContext context) {
+    final kv = context.kv;
+    final now = DateTime.now();
+    final countLabel =
+        '${projects.length} ${projects.length == 1 ? 'song' : 'songs'}';
+
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              const _Header(),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text('Projects', style: KvText.heading(size: 34)),
+                  Text(countLabel, style: KvText.ui(size: 14, color: kv.text2)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 112),
+                  itemCount: projects.length,
+                  itemBuilder: (context, index) {
+                    final summary = projects[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: ProjectCard(
+                        summary: summary,
+                        now: now,
+                        onTap: () => onOpenProject(summary),
+                        onLongPress: () => onLongPressProject(summary),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  kv.background.withValues(alpha: 0),
+                  kv.background.withValues(alpha: 0.92),
+                  kv.background,
+                ],
+                stops: const [0.0, 0.35, 1.0],
+              ),
+            ),
+            child: _ImportButton(onImport: onImport, height: 60),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyHomeBody extends StatelessWidget {
+  const _EmptyHomeBody({required this.onImport});
+
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    final kv = context.kv;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          const _Header(),
+          const Spacer(flex: 3),
+          _EmptyArt(onTap: onImport),
+          const SizedBox(height: 18),
+          Text(
+            'No beat packs yet',
+            textAlign: TextAlign.center,
+            style: KvText.heading(size: 28),
+          ),
+          const SizedBox(height: 18),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 310),
+            child: Text(
+              'Import the song you’re editing to. We’ll find the beats, '
+              'you fix the rest, then export a pack for CapCut or VN.',
+              textAlign: TextAlign.center,
+              style: KvText.ui(size: 16, color: kv.text2, height: 1.45),
+            ),
+          ),
+          const Spacer(flex: 4),
+          _ImportButton(onImport: onImport),
+          const SizedBox(height: 8),
+          // How-to guide arrives in M8.
+          SizedBox(
+            height: 48,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                KvIcon(KvIcons.help, size: 20, color: kv.text3),
+                const SizedBox(width: 8),
+                Text(
+                  'How beat packs work',
+                  style: KvText.ui(
+                    size: 16,
+                    weight: FontWeight.w600,
+                    color: kv.text3,
                   ),
                 ),
-                const SizedBox(height: 24),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportButton extends StatelessWidget {
+  const _ImportButton({required this.onImport, this.height = 64});
+
+  final VoidCallback onImport;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SourcePickerCubit, SourcePickerState>(
+      builder: (context, state) => KvPrimaryButton(
+        label: 'Import a song',
+        icon: KvIcons.plus,
+        height: height,
+        radius: 20,
+        fontSize: 18,
+        onPressed: state is SourcePickerBusy ? null : onImport,
       ),
     );
   }

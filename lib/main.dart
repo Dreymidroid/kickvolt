@@ -1,13 +1,23 @@
-import 'package:material_ui/material_ui.dart';
+import 'dart:developer' as developer;
+
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app/app.dart';
 import 'core/core.dart';
+import 'features/projects/data/repositories/project_repository.dart';
 import 'shared/shared.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setupLocator();
+  try {
+    await locator<ProjectRepository>().cleanUpOrphans().timeout(
+      const Duration(milliseconds: 500),
+    );
+  } catch (e) {
+    developer.log('Orphan project cleanup failed: $e', name: 'main');
+  }
   // Painters draw text directly, so fonts must be ready before first frame.
   // Don't block launch forever when offline; fall back to system fonts.
   try {
