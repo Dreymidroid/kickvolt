@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kickvolt-web",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "8642", "--web-hostname", "localhost"],
+      "port": 8642
+    },
+    {
+      "name": "kickvolt-web-release",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8643", "--bind", "127.0.0.1", "--directory", "build/web"],
+      "port": 8643
+    }
+  ]
+}

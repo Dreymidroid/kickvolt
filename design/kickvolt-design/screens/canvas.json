@@ -1,0 +1,347 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-22T10:50:29Z"
+ },
+ "title": "KickVolt",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Onboarding 1 \u2013 The problem",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Onboarding2.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Onboarding 2 \u2013 Beat pack",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Onboarding3.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Onboarding 3 \u2013 Permissions",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "HomeEmpty.dc.html": {
+   "x": 0,
+   "y": 1204,
+   "w": 390,
+   "h": 844,
+   "title": "Home \u2013 Empty",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Home.dc.html": {
+   "x": 470,
+   "y": 1204,
+   "w": 390,
+   "h": 844,
+   "title": "Home \u2013 Projects",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "ImportSheet.dc.html": {
+   "x": 940,
+   "y": 1204,
+   "w": 390,
+   "h": 844,
+   "title": "Import \u2013 Source picker",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Analyzing.dc.html": {
+   "x": 1410,
+   "y": 1204,
+   "w": 390,
+   "h": 844,
+   "title": "Import \u2013 Analyzing",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "ImportError.dc.html": {
+   "x": 1880,
+   "y": 1204,
+   "w": 390,
+   "h": 844,
+   "title": "Error \u2013 Unsupported file",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorEmpty.dc.html": {
+   "x": 0,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Empty",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorAutoDetect.dc.html": {
+   "x": 470,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Auto-detect",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorDetected.dc.html": {
+   "x": 940,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Auto-detected",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorSelected.dc.html": {
+   "x": 1410,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Marker selected",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorTap.dc.html": {
+   "x": 1880,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Tap-to-mark",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorPlaying.dc.html": {
+   "x": 2350,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Playing",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorBulk.dc.html": {
+   "x": 2820,
+   "y": 2408,
+   "w": 390,
+   "h": 844,
+   "title": "Editor \u2013 Bulk actions",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Coach1.dc.html": {
+   "x": 0,
+   "y": 3612,
+   "w": 390,
+   "h": 844,
+   "title": "Coach mark 1 \u2013 Waveform",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Coach2.dc.html": {
+   "x": 470,
+   "y": 3612,
+   "w": 390,
+   "h": 844,
+   "title": "Coach mark 2 \u2013 Tools",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Coach3.dc.html": {
+   "x": 940,
+   "y": 3612,
+   "w": 390,
+   "h": 844,
+   "title": "Coach mark 3 \u2013 Export",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "EditorDetectFailed.dc.html": {
+   "x": 1410,
+   "y": 3612,
+   "w": 390,
+   "h": 844,
+   "title": "Error \u2013 Detection failed",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Export.dc.html": {
+   "x": 0,
+   "y": 4816,
+   "w": 390,
+   "h": 844,
+   "title": "Export \u2013 Beat pack options",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Exporting.dc.html": {
+   "x": 470,
+   "y": 4816,
+   "w": 390,
+   "h": 844,
+   "title": "Export \u2013 In progress",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "ExportFailed.dc.html": {
+   "x": 940,
+   "y": 4816,
+   "w": 390,
+   "h": 844,
+   "title": "Error \u2013 Export failed",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "ExportSuccess.dc.html": {
+   "x": 1410,
+   "y": 4816,
+   "w": 390,
+   "h": 844,
+   "title": "Export \u2013 Success",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "HowToCapCut.dc.html": {
+   "x": 0,
+   "y": 6020,
+   "w": 390,
+   "h": 844,
+   "title": "How-to \u2013 CapCut",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "HowToVN.dc.html": {
+   "x": 470,
+   "y": 6020,
+   "w": 390,
+   "h": 844,
+   "title": "How-to \u2013 VN",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Settings.dc.html": {
+   "x": 940,
+   "y": 6020,
+   "w": 390,
+   "h": 844,
+   "title": "Settings",
+   "radius": 44,
+   "is_interactive": true
+  },
+  "Paywall.dc.html": {
+   "x": 1410,
+   "y": 6020,
+   "w": 390,
+   "h": 844,
+   "title": "Paywall \u2013 Pro",
+   "radius": 44,
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Onboarding2.dc.html",
+  "Onboarding3.dc.html",
+  "HomeEmpty.dc.html",
+  "Home.dc.html",
+  "ImportSheet.dc.html",
+  "Analyzing.dc.html",
+  "ImportError.dc.html",
+  "EditorEmpty.dc.html",
+  "EditorAutoDetect.dc.html",
+  "EditorDetected.dc.html",
+  "EditorSelected.dc.html",
+  "EditorTap.dc.html",
+  "EditorPlaying.dc.html",
+  "EditorBulk.dc.html",
+  "Coach1.dc.html",
+  "Coach2.dc.html",
+  "Coach3.dc.html",
+  "EditorDetectFailed.dc.html",
+  "Export.dc.html",
+  "Exporting.dc.html",
+  "ExportFailed.dc.html",
+  "ExportSuccess.dc.html",
+  "HowToCapCut.dc.html",
+  "HowToVN.dc.html",
+  "Settings.dc.html",
+  "Paywall.dc.html"
+ ],
+ "notes": {
+  "row0": {
+   "x": 0,
+   "y": -260,
+   "text": "1 \u00b7 Onboarding",
+   "kind": "title1",
+   "maxW": 1600
+  },
+  "row1": {
+   "x": 0,
+   "y": 944,
+   "text": "2\u20133 \u00b7 Home & import",
+   "kind": "title1",
+   "maxW": 2270
+  },
+  "row2": {
+   "x": 0,
+   "y": 2148,
+   "text": "4 \u00b7 Beat Editor: key states",
+   "kind": "title1",
+   "maxW": 3210
+  },
+  "row3": {
+   "x": 0,
+   "y": 3352,
+   "text": "4 \u00b7 Beat Editor: first run & errors",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "row4": {
+   "x": 0,
+   "y": 4556,
+   "text": "5\u20136 \u00b7 Export",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "row5": {
+   "x": 0,
+   "y": 5760,
+   "text": "7\u20139 \u00b7 Guide, settings & Pro",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "haptics": {
+   "x": 3330,
+   "y": 2408,
+   "w": 380,
+   "size": "m",
+   "fill": "teal",
+   "text": "Haptics map\n\u2022 Light tick: marker placed (tap pad, long-press, add at playhead)\n\u2022 Light tick: marker snaps to grid, or each nudge step\n\u2022 Medium: strong beat passes the playhead (only when Clicks is on)\n\u2022 Heavy: drop passes the playhead\n\u2022 Success: detection done, export done\n\u2022 Warning: delete, clear range\nAll off with Settings \u203a Haptics."
+  },
+  "system": {
+   "x": 1500,
+   "y": 0,
+   "w": 380,
+   "size": "m",
+   "fill": "gray",
+   "text": "System\n\u2022 Ground #0B0B10, surfaces #14141C / #1C1C27\n\u2022 One accent: Volt #C6FF3D for beats, primary actions, focus\n\u2022 Strong beats = numbered pills + glow; regular = thin dim lines; drops = DROP flag\n\u2022 Sections are tinted regions (violet intro, cyan verse, pink build, orange drop)\n\u2022 Space Grotesk headings, Inter UI, JetBrains Mono for times, BPM and counts\n\u2022 Thumb zone: tools and play live in the bottom 45%"
+  }
+ },
+ "designSystems": []
+}
