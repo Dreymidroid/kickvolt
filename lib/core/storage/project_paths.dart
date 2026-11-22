@@ -11,6 +11,9 @@ class ProjectPaths {
 
   String get projectsDir => p.join(documentsDir, 'projects');
 
+  /// Summary index for the Projects home screen.
+  String get indexJson => p.join(projectsDir, 'index.json');
+
   String projectDir(String id) => p.join(projectsDir, id);
 
   /// Copy of the imported file. [extension] has no leading dot.
@@ -21,6 +24,12 @@ class ProjectPaths {
 
   /// Decoded 16-bit PCM WAV: the master timebase.
   String songWav(String id) => p.join(projectDir(id), 'song.wav');
+
+  /// Coarsest waveform overview (~10 ms bins, 1 byte per bin).
+  String overviewBin(String id) => p.join(projectDir(id), 'overview.bin');
+
+  /// Persisted project document.
+  String projectJson(String id) => p.join(projectDir(id), 'project.json');
 
   Future<Directory> createProjectDir(String id) =>
       Directory(projectDir(id)).create(recursive: true);
