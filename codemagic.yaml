@@ -1,0 +1,36 @@
+# CI: analyze, test, and compile both platforms (unsigned) on every push.
+# Signing and store publishing get their own workflow later (M8).
+workflows:
+  ci:
+    name: Analyze, test, build (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.47.2
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+        - pull_request
+      cancel_previous_builds: true
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Check generated code is up to date
+        script: |
+          dart run build_runner build --delete-conflicting-outputs
+          dart run pigeon --input pigeons/audio_api.dart
+          dart format lib/core/audio_native/audio_api.g.dart
+          git diff --exit-code -- lib android ios
+      - name: Analyze
+        script: flutter analyze
+      - name: Unit and widget tests
+        script: flutter test
+      - name: Build Android (debug APK)
+        script: flutter build apk --debug
+      - name: Build iOS (debug, no codesign)
+        script: flutter build ios --debug --no-codesign
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/ios/iphoneos/*.app

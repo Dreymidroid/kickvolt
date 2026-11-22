@@ -199,3 +199,15 @@ Every milestone ends with: codegen if needed → `dart format .` → `flutter an
 6. **Free tier:** **30 exports per rolling 7 days** (a whole beat pack = one export), N configurable. All copy uses 30, overriding the designs' "3": Paywall row "Unlimited exports — Free: 30 a week", Export button caption "Uses 1 of your 30 free exports this week" (with the live remaining count).
 7. **Theme:** dark only. Settings shows no theme switch for now (the theme row is dropped from the Settings screen).
 8. **Guide track:** **stereo** 16-bit by default (same click on both channels, same sample rate and frame count as the song), with a Settings toggle "Mono guide track (smaller file)".
+
+## 9. Progress
+
+### M1 — Import and decode: done (2026-11-22)
+- App ID `com.kickvolt.app`, Android minSdk 24, iOS 15. `codemagic.yaml` added (analyze, tests, generated-code check, unsigned Android + iOS builds).
+- Pigeon API `pigeons/audio_api.dart` → `AudioHostApi` (decode, cancel, music library, content-URI copy, free space) + `AudioProgressApi`.
+- Android: `WavDecoder.kt` (MediaExtractor + MediaCodec → 16-bit WAV, float output handled, >2 ch → first two), MediaStore library list with `READ_MEDIA_AUDIO` / `READ_EXTERNAL_STORAGE` (≤ 32).
+- iOS: `WavDecoder.swift` (AVAssetReader, async property loading, `hasProtectedContent` → DRM error), `MPMediaPickerController` (nil `assetURL` → DRM or not-downloaded error). Library songs are decoded straight from the `ipod-library://` URL; `song.wav` is their durable copy.
+- Dart: `ImportRepository` (copy → decode → read the WAV header back and cross-check), `SourcePickerCubit`, `ImportCubit`, Home empty state, Import sheet, Analyzing (decode progress, cancel), import error dialog, Android library list.
+- Spike: `image_picker_ios` uses PHPicker with `preferredAssetRepresentationMode = .current`, so videos arrive untranscoded.
+- **Not verified yet:** neither native side has been compiled. iOS needs Codemagic; the local Android build was blocked by a slow Gradle distribution download. No on-device test of decode yet.
+- Until M2, a successful import opens the editor with the demo song (projects aren't persisted yet).

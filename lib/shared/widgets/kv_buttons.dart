@@ -158,3 +158,74 @@ class KvSecondaryButton extends StatelessWidget {
     );
   }
 }
+
+/// Primary volt button with the design's glow. [height] 52–64.
+class KvPrimaryButton extends StatelessWidget {
+  const KvPrimaryButton({
+    super.key,
+    required this.label,
+    this.icon,
+    required this.onPressed,
+    this.height = 56,
+    this.radius = 16,
+    this.fontSize = 17,
+  });
+
+  final String label;
+  final KvIcons? icon;
+  final VoidCallback? onPressed;
+  final double height;
+  final double radius;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final kv = context.kv;
+    final enabled = onPressed != null;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: enabled
+            ? [
+                BoxShadow(
+                  color: kv.volt.withValues(alpha: 0.28),
+                  blurRadius: 28,
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: enabled ? kv.volt : kv.volt.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            height: height,
+            width: double.infinity,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) ...[
+                  KvIcon(icon!, size: 22, color: kv.onVolt),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: KvText.ui(
+                      size: fontSize,
+                      weight: FontWeight.w600,
+                      color: kv.onVolt,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

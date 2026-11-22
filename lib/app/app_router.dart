@@ -9,7 +9,8 @@ part 'app_router.gr.dart';
 class AppRouter extends RootStackRouter {
   @override
   List<AutoRoute> get routes => [
-    // Editor is the entry point until Home and onboarding are built.
-    AutoRoute(page: BeatEditorRoute.page, initial: true),
+    AutoRoute(page: HomeRoute.page, initial: true),
+    AutoRoute(page: AnalyzingRoute.page),
+    AutoRoute(page: BeatEditorRoute.page),
   ];
 }

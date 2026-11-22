@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Music library import (MediaStore). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <application
-        android:label="kickvolt"
+        android:label="KickVolt"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

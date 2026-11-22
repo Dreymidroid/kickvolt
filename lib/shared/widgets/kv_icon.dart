@@ -48,7 +48,30 @@ enum KvIcons {
     '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>'
     '<path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',
   ),
-  bolt('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>');
+  bolt('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>'),
+  close('<path d="M18 6 6 18M6 6l12 12"/>'),
+  check('<path d="M20 6 9 17l-5-5"/>'),
+  help(
+    '<circle cx="12" cy="12" r="10"/>'
+    '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
+  ),
+  sliders(
+    '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  ),
+  folder(
+    '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
+  ),
+  music(
+    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/>'
+    '<circle cx="18" cy="16" r="3"/>',
+  ),
+  video(
+    '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4V8Z"/>',
+  ),
+  file(
+    '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>'
+    '<path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  );
 
   const KvIcons(this.body);
   final String body;
