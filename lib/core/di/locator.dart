@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../features/playback/data/audio_playback.dart';
 import '../../features/playback/data/just_audio_playback.dart';
 
+import '../../features/beat_detection/data/repositories/beat_detection_repository.dart';
 import '../../features/import/data/datasources/source_picker.dart';
 import '../../features/import/data/repositories/import_repository.dart';
 import '../../features/projects/data/repositories/project_repository.dart';
@@ -31,6 +32,12 @@ void setupLocator() {
   );
   locator.registerLazySingleton<ProjectRepository>(
     () => ProjectRepositoryImpl(paths: () => locator<Future<ProjectPaths>>()),
+  );
+  locator.registerLazySingleton<BeatDetectionRepository>(
+    () => BeatDetectionRepositoryImpl(
+      paths: () => locator<Future<ProjectPaths>>(),
+      projectRepository: locator<ProjectRepository>(),
+    ),
   );
 
   // A new player per editor; the editor disposes it.
