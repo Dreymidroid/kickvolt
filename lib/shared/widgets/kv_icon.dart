@@ -49,6 +49,10 @@ enum KvIcons {
     '<path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',
   ),
   bolt('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>'),
+  alertCircle(
+    '<circle cx="12" cy="12" r="10"/>'
+    '<path d="M12 8v4M12 16h.01"/>',
+  ),
   close('<path d="M18 6 6 18M6 6l12 12"/>'),
   check('<path d="M20 6 9 17l-5-5"/>'),
   help(

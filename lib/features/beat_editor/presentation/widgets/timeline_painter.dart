@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../../../core/audio_math/pcm_window_loader.dart';
 import '../../../../core/audio_math/peaks.dart';
 import '../../../../shared/shared.dart';
+import '../../../beat_detection/beat_detection.dart';
 import '../../../projects/projects.dart';
 import '../../bloc/beat_editor_cubit.dart';
 
@@ -49,6 +50,9 @@ class TimelinePainter extends CustomPainter {
     required this.colors,
     this.pcm,
     this.selectedIndex,
+    this.beatsOverride,
+    this.filterOverride,
+    this.sectionsOverride,
   }) : super(repaint: Listenable.merge([playhead, zoom, ?pcm])) {
     _beatLine.color = colors.volt.withValues(alpha: 0.5);
     _farBeatLine.color = colors.volt.withValues(alpha: 0.28);
@@ -78,6 +82,13 @@ class TimelinePainter extends CustomPainter {
   final PcmWindowLoader? pcm;
   final KvColors colors;
   final int? selectedIndex;
+  final List<Beat>? beatsOverride;
+  final BeatFilter? filterOverride;
+  final List<Section>? sectionsOverride;
+
+  List<Beat> get _effectiveBeats => beatsOverride ?? project.beats;
+  BeatFilter get _effectiveFilter => filterOverride ?? project.detection.filter;
+  List<Section> get _effectiveSections => sectionsOverride ?? project.sections;
 
   static const _rulerLabelTop = 8.0;
   static const _rulerTickTop = 22.0;
@@ -125,8 +136,9 @@ class TimelinePainter extends CustomPainter {
   double _pxPerSample(double z) =>
       z * kPxPerSecondAt1x / math.max(1, project.sampleRate);
 
-  /// Index of the marker under a tap at [dx], or null if none is within
-  /// [slopPx]. Taps above the section tint (ruler, labels) are ignored.
+  /// Index into `project.beats` of the visible marker under a tap at [dx], or
+  /// null if none is within [slopPx]. Hidden (filtered-out) beats are not
+  /// tappable (§6.2). Taps above the section tint (ruler, labels) are ignored.
   static int? beatAt({
     required Project project,
     required int playheadSample,
@@ -139,18 +151,21 @@ class TimelinePainter extends CustomPainter {
     double slopPx = 10,
   }) {
     if (dy < _tintTop || project.beats.isEmpty) return null;
+    final visible = visibleBeatIndices(project);
+    if (visible.isEmpty) return null;
     final pxPerSample =
         zoom * kPxPerSecondAt1x / math.max(1, project.sampleRate);
     final sampleAtTap = playheadSample + (dx - width / 2) / pxPerSample;
     final beats = project.beats;
-    final hi = _lowerBound(beats, sampleAtTap);
+    final hi = _lowerBoundVisible(beats, visible, sampleAtTap);
     int? best;
     var bestPx = slopPx;
-    for (final i in [hi - 1, hi]) {
-      if (i < 0 || i >= beats.length) continue;
-      final px = (beats[i].sample - sampleAtTap).abs() * pxPerSample;
+    for (final vIdx in [hi - 1, hi]) {
+      if (vIdx < 0 || vIdx >= visible.length) continue;
+      final realIndex = visible[vIdx];
+      final px = (beats[realIndex].sample - sampleAtTap).abs() * pxPerSample;
       if (px <= bestPx) {
-        best = i;
+        best = realIndex;
         bestPx = px;
       }
     }
@@ -184,7 +199,7 @@ class TimelinePainter extends CustomPainter {
     double from,
     double to,
   ) {
-    for (final s in project.sections) {
+    for (final s in _effectiveSections) {
       if (s.endSample < from || s.startSample > to) continue;
       final color = Color(s.colorArgb);
       final l = xOf(s.startSample).clamp(0.0, size.width);
@@ -350,15 +365,23 @@ class TimelinePainter extends CustomPainter {
     double fromSample,
     double toSample,
   ) {
-    final beats = project.beats;
+    final beats = _effectiveBeats;
     if (beats.isEmpty) return;
+    final visible = visibleBeatIndicesForList(beats, _effectiveFilter);
+    if (visible.isEmpty) return;
+
     final pad = 40 / pps;
-    var i = _lowerBound(beats, fromSample - pad);
+    var vi = _lowerBoundVisible(beats, visible, fromSample - pad);
 
     double? selectedX;
     var prevX = double.negativeInfinity;
     var lastLineX = double.negativeInfinity;
-    for (; i < beats.length && beats[i].sample <= toSample + pad; i++) {
+    for (
+      ;
+      vi < visible.length && beats[visible[vi]].sample <= toSample + pad;
+      vi++
+    ) {
+      final i = visible[vi];
       final b = beats[i];
       final x = xOf(b.sample);
       if (i == selectedIndex) {
@@ -366,8 +389,8 @@ class TimelinePainter extends CustomPainter {
         prevX = x;
         continue;
       }
-      final nextX = i + 1 < beats.length
-          ? xOf(beats[i + 1].sample)
+      final nextX = vi + 1 < visible.length
+          ? xOf(beats[visible[vi + 1]].sample)
           : double.infinity;
       final detailed = math.min(x - prevX, nextX - x) >= _detailedBeatSpacingPx;
       prevX = x;
@@ -557,12 +580,16 @@ class TimelinePainter extends CustomPainter {
     );
   }
 
-  static int _lowerBound(List<Beat> beats, double sample) {
+  static int _lowerBoundVisible(
+    List<Beat> beats,
+    List<int> visible,
+    double sample,
+  ) {
     var lo = 0;
-    var hi = beats.length;
+    var hi = visible.length;
     while (lo < hi) {
       final mid = (lo + hi) >> 1;
-      if (beats[mid].sample < sample) {
+      if (beats[visible[mid]].sample < sample) {
         lo = mid + 1;
       } else {
         hi = mid;
@@ -591,6 +618,9 @@ class TimelinePainter extends CustomPainter {
       old.zoom != zoom ||
       old.pcm != pcm ||
       old.selectedIndex != selectedIndex ||
+      old.beatsOverride != beatsOverride ||
+      old.filterOverride != filterOverride ||
+      old.sectionsOverride != sectionsOverride ||
       old.colors != colors;
 }
 

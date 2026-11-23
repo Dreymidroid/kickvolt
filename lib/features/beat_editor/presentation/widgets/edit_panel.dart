@@ -2,10 +2,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
+import '../../../beat_detection/beat_detection.dart';
+import '../../../projects/projects.dart';
 import '../../bloc/beat_editor_cubit.dart';
-
-const String kAutoDetectPlaceholderMessage =
-    'Beat detection arrives in the next update';
 
 /// Context panel for the Edit tab with no marker selected.
 /// When the project has 0 beats, renders the empty prompt from `EditorEmpty.png`.
@@ -15,16 +14,12 @@ class EditPanel extends StatelessWidget {
   final BeatEditorReady state;
   final VoidCallback? onRedetect;
 
-  void _showDetectionPlaceholder(BuildContext context) {
+  void _openAutoDetect(BuildContext context) {
     if (onRedetect != null) {
       onRedetect!();
       return;
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(content: Text(kAutoDetectPlaceholderMessage)),
-      );
+    context.read<BeatEditorCubit>().openAutoDetectSheet();
   }
 
   @override
@@ -42,7 +37,7 @@ class EditPanel extends StatelessWidget {
             icon: KvIcons.sparkle,
             height: 56,
             fontSize: 17,
-            onPressed: () => _showDetectionPlaceholder(context),
+            onPressed: () => _openAutoDetect(context),
           ),
           const SizedBox(height: 10),
           KvSecondaryButton(
@@ -60,21 +55,31 @@ class EditPanel extends StatelessWidget {
       );
     }
 
+    final visibleIndices = visibleBeatIndices(p);
+    final visibleCount = visibleIndices.length;
+    var visibleStrong = 0;
+    var visibleDrops = 0;
+    for (final i in visibleIndices) {
+      final t = p.beats[i].type;
+      if (t != BeatType.beat) visibleStrong++;
+      if (t == BeatType.drop) visibleDrops++;
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
             Expanded(
-              child: _StatCard(value: p.beatCount, label: 'beats'),
+              child: _StatCard(value: visibleCount, label: 'beats'),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _StatCard(value: p.strongCount, label: 'strong'),
+              child: _StatCard(value: visibleStrong, label: 'strong'),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _StatCard(value: p.dropCount, label: 'drops'),
+              child: _StatCard(value: visibleDrops, label: 'drops'),
             ),
           ],
         ),
@@ -107,7 +112,7 @@ class EditPanel extends StatelessWidget {
               child: KvSecondaryButton(
                 label: 'Re-detect',
                 icon: KvIcons.sparkle,
-                onPressed: () => _showDetectionPlaceholder(context),
+                onPressed: () => _openAutoDetect(context),
               ),
             ),
           ],

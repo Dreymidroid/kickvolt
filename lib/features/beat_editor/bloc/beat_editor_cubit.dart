@@ -9,6 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../core/audio_math/pcm_window_loader.dart';
 import '../../../core/audio_math/peaks.dart';
 import '../../../core/di/locator.dart';
+import '../../beat_detection/beat_detection.dart';
 import '../../playback/playback.dart';
 import '../../projects/projects.dart';
 
@@ -26,12 +27,19 @@ const double kWaveBarStep = 3;
 class BeatEditorCubit extends Cubit<BeatEditorState> {
   BeatEditorCubit({
     ProjectRepository? repository,
+    BeatDetectionRepository? detectionRepository,
     this._playback,
     this.saveDebounce = const Duration(milliseconds: 500),
   }) : _repository = repository ?? locator<ProjectRepository>(),
+       _detectionRepository =
+           detectionRepository ??
+           (locator.isRegistered<BeatDetectionRepository>()
+               ? locator<BeatDetectionRepository>()
+               : null),
        super(const BeatEditorState.loading());
 
   final ProjectRepository _repository;
+  final BeatDetectionRepository? _detectionRepository;
   final Duration saveDebounce;
   AudioPlayback? _playback;
 
@@ -42,6 +50,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   double _viewportWidth = 0;
   bool _resumeAfterScrub = false;
   bool _closing = false;
+
+  BeatAnalysis? _cachedAnalysis;
+  DetectionResult? _lastPreviewResult;
+  AnalysisCancelToken? _analysisCancelToken;
 
   DateTime? _lastNudgeAt;
   int? _lastNudgeIndex;
@@ -134,12 +146,16 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
       }
       if (isClosed) return;
 
+      final showFailed = project.detection.status == DetectionStatus.failed;
       emit(
         BeatEditorState.ready(
           project: project,
           peaks: peaks,
           snap: project.bpm != null,
           playbackUnavailable: unavailable,
+          activeSheet: showFailed ? EditorSheet.detectFailed : EditorSheet.none,
+          previewSensitivity: project.detection.sensitivity,
+          previewFilter: project.detection.filter,
         ),
       );
       _zoom.addListener(_ensureRawWindow);
@@ -249,6 +265,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   void selectTool(EditorTool tool) {
     final s = _ready;
     if (s == null) return;
+    if (tool == EditorTool.auto) {
+      unawaited(openAutoDetectSheet());
+      return;
+    }
     // The marker inspector only exists on the Edit tab.
     emit(
       s.copyWith(
@@ -257,6 +277,377 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Auto-detect sheet & No-steady-beat sheet (§6.2)
+  // ---------------------------------------------------------------------------
+
+  /// Opens the Auto-detect sheet. Uses the cached [BeatAnalysis] if available;
+  /// otherwise runs the background isolate with progress and cancel support.
+  Future<void> openAutoDetectSheet({double? initialSensitivity}) async {
+    final s = _ready;
+    if (s == null) return;
+
+    final sens = (initialSensitivity ?? s.project.detection.sensitivity).clamp(
+      0.0,
+      1.0,
+    );
+    final filter = s.project.detection.filter;
+
+    emit(
+      s.copyWith(
+        tool: EditorTool.auto,
+        selectedIndex: null,
+        activeSheet: EditorSheet.autoDetect,
+        previewSensitivity: sens,
+        previewFilter: filter,
+        infoMessage: null,
+      ),
+    );
+
+    final analysis = await _ensureAnalysis(s.project.id);
+    if (isClosed || analysis == null) return;
+
+    final cur = _ready;
+    if (cur == null || cur.activeSheet != EditorSheet.autoDetect) return;
+    _applyPreview(cur, analysis, cur.previewSensitivity, cur.previewFilter);
+  }
+
+  Future<BeatAnalysis?> _ensureAnalysis(String projectId) async {
+    if (_cachedAnalysis != null) return _cachedAnalysis;
+    final detector = _detectionRepository;
+    if (detector == null) return null;
+
+    final diskCached = await detector.getCachedAnalysis(projectId);
+    if (diskCached != null) {
+      _cachedAnalysis = diskCached;
+      return diskCached;
+    }
+
+    final cur = _ready;
+    if (cur == null || isClosed) return null;
+
+    final token = AnalysisCancelToken();
+    _analysisCancelToken = token;
+    emit(cur.copyWith(analyzing: true, analysisProgress: 0.0));
+
+    try {
+      final result = await detector.analyze(
+        projectId,
+        cancelToken: token,
+        onProgress: (p) {
+          final latest = _ready;
+          if (!isClosed && latest != null && latest.analyzing) {
+            emit(latest.copyWith(analysisProgress: p.fraction));
+          }
+        },
+      );
+      _analysisCancelToken = null;
+      _cachedAnalysis = result;
+      final latest = _ready;
+      if (!isClosed && latest != null) {
+        emit(latest.copyWith(analyzing: false, analysisProgress: 1.0));
+      }
+      return result;
+    } on AnalysisCancelledException {
+      _analysisCancelToken = null;
+      final latest = _ready;
+      if (!isClosed && latest != null) {
+        emit(
+          latest.copyWith(
+            analyzing: false,
+            analysisProgress: 0.0,
+            activeSheet: EditorSheet.none,
+            tool: EditorTool.edit,
+            previewBeats: null,
+            previewBpm: null,
+            previewSections: null,
+          ),
+        );
+      }
+      return null;
+    } catch (e) {
+      _analysisCancelToken = null;
+      final latest = _ready;
+      if (!isClosed && latest != null) {
+        emit(
+          latest.copyWith(
+            analyzing: false,
+            analysisProgress: 0.0,
+            activeSheet: EditorSheet.none,
+            tool: EditorTool.edit,
+            infoMessage: 'Could not analyze audio: $e',
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
+  /// Cancels an in-flight analysis inside the Auto-detect sheet.
+  Future<void> cancelAnalysis() async {
+    await _analysisCancelToken?.cancel();
+  }
+
+  /// Updates the sensitivity slider while the Auto-detect sheet is open.
+  /// Re-classifies synchronously from the cached analysis (no isolate, no save).
+  void setPreviewSensitivity(double sensitivity) {
+    final s = _ready;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
+    final clamped = sensitivity.clamp(0.0, 1.0);
+    final analysis = _cachedAnalysis;
+    if (analysis == null) {
+      emit(s.copyWith(previewSensitivity: clamped));
+      return;
+    }
+    _applyPreview(s, analysis, clamped, s.previewFilter);
+  }
+
+  /// Updates the filter chip while the Auto-detect sheet is open (preview only).
+  void setPreviewFilter(BeatFilter filter) {
+    final s = _ready;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
+    emit(s.copyWith(previewFilter: filter));
+  }
+
+  void _applyPreview(
+    BeatEditorReady s,
+    BeatAnalysis analysis,
+    double sensitivity,
+    BeatFilter filter,
+  ) {
+    final detector = _detectionRepository;
+    final result = detector != null
+        ? detector.classify(analysis, sensitivity)
+        : classifyBeats(analysis, sensitivity: sensitivity);
+    _lastPreviewResult = result;
+    emit(
+      s.copyWith(
+        analyzing: false,
+        previewSensitivity: sensitivity,
+        previewFilter: filter,
+        previewBeats: result.beats,
+        previewBpm: result.bpm,
+        previewSections: result.sections,
+        previewSucceeded: result.succeeded,
+      ),
+    );
+  }
+
+  /// Closes the Auto-detect or Failed sheet without committing any changes,
+  /// restoring the project's existing beats and returning to the Edit tab.
+  void closeSheet() {
+    unawaited(_analysisCancelToken?.cancel());
+    final s = _ready;
+    if (s == null) return;
+    emit(
+      s.copyWith(
+        activeSheet: EditorSheet.none,
+        tool: s.tool == EditorTool.auto ? EditorTool.edit : s.tool,
+        analyzing: false,
+        previewBeats: null,
+        previewBpm: null,
+        previewSections: null,
+        previewSucceeded: true,
+        infoMessage: null,
+      ),
+    );
+  }
+
+  /// Commits the current Auto-detect preview to the project through the normal
+  /// undoable commit path (§6.2). If classification failed, opens the
+  /// "No steady beat" sheet instead.
+  void commitAutoDetect() {
+    final s = _ready;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
+    final analysis = _cachedAnalysis;
+    if (analysis == null) return;
+
+    final result =
+        _lastPreviewResult ??
+        (_detectionRepository != null
+            ? _detectionRepository.classify(analysis, s.previewSensitivity)
+            : classifyBeats(analysis, sensitivity: s.previewSensitivity));
+
+    if (!result.succeeded) {
+      final updatedProject = s.project.copyWith(
+        detection: s.project.detection.copyWith(
+          sensitivity: s.previewSensitivity,
+          filter: s.previewFilter,
+          status: DetectionStatus.failed,
+        ),
+      );
+      emit(
+        s.copyWith(
+          project: updatedProject,
+          activeSheet: EditorSheet.detectFailed,
+          tool: EditorTool.edit,
+          previewBeats: null,
+          previewBpm: null,
+          previewSections: null,
+          previewSucceeded: false,
+        ),
+      );
+      _scheduleSave(updatedProject);
+      return;
+    }
+
+    _lastNudgeAt = null;
+    final undo = [...s.undoStack, s.project.beats];
+    final updatedProject = s.project.copyWith(
+      beats: result.beats,
+      bpm: result.bpm,
+      beatPhaseSample: result.beatPhaseSample,
+      sections: result.sections,
+      detection: s.project.detection.copyWith(
+        sensitivity: s.previewSensitivity,
+        filter: s.previewFilter,
+        status: DetectionStatus.succeeded,
+      ),
+    );
+    emit(
+      s.copyWith(
+        project: updatedProject,
+        snap: updatedProject.bpm != null,
+        undoStack: undo.length > _historyLimit
+            ? undo.sublist(undo.length - _historyLimit)
+            : undo,
+        redoStack: const [],
+        selectedIndex: null,
+        activeSheet: EditorSheet.none,
+        tool: EditorTool.edit,
+        previewBeats: null,
+        previewBpm: null,
+        previewSections: null,
+        previewSucceeded: true,
+        saveError: null,
+      ),
+    );
+    HapticFeedback.mediumImpact();
+    _scheduleSave(updatedProject);
+  }
+
+  /// Action from "No steady beat" sheet: switch to the Tap tool.
+  void tapBeatsFromFailedSheet() {
+    final s = _ready;
+    if (s == null) return;
+    emit(
+      s.copyWith(
+        activeSheet: EditorSheet.none,
+        tool: EditorTool.tap,
+        selectedIndex: null,
+        previewBeats: null,
+        previewBpm: null,
+        previewSections: null,
+      ),
+    );
+  }
+
+  /// Action from "No steady beat" sheet: re-classify with sensitivity +0.25
+  /// (capped at 1.0) and open the Auto-detect sheet on the result (§6.2).
+  Future<void> detectWithMoreSensitivity() async {
+    final s = _ready;
+    if (s == null) return;
+    final nextSens = (s.project.detection.sensitivity + 0.25).clamp(0.0, 1.0);
+    await openAutoDetectSheet(initialSensitivity: nextSens);
+  }
+
+  /// Action from "No steady beat" sheet: commit only the drop beats found from
+  /// energy alone, or show a SnackBar if none were found (§4.6, §6.2).
+  Future<void> markDropsOnly() async {
+    final s = _ready;
+    if (s == null) return;
+
+    final analysis = await _ensureAnalysis(s.project.id);
+    if (isClosed) return;
+    final cur = _ready;
+    if (cur == null) return;
+
+    final List<Beat> drops;
+    if (analysis == null) {
+      drops = const <Beat>[];
+    } else {
+      final res = _detectionRepository != null
+          ? _detectionRepository.classify(
+              analysis,
+              cur.project.detection.sensitivity,
+            )
+          : classifyBeats(
+              analysis,
+              sensitivity: cur.project.detection.sensitivity,
+            );
+      drops = res.succeeded
+          ? res.beats.where((b) => b.type == BeatType.drop).toList()
+          : res.fallbackDrops;
+    }
+
+    if (drops.isEmpty) {
+      emit(
+        cur.copyWith(
+          activeSheet: EditorSheet.none,
+          tool: EditorTool.edit,
+          infoMessage: 'No drops were found in this song',
+        ),
+      );
+      return;
+    }
+
+    _lastNudgeAt = null;
+    final undo = [...cur.undoStack, cur.project.beats];
+    final updatedProject = cur.project.copyWith(
+      beats: drops,
+      detection: cur.project.detection.copyWith(
+        filter: BeatFilter.drops,
+        status: DetectionStatus.succeeded,
+      ),
+    );
+    emit(
+      cur.copyWith(
+        project: updatedProject,
+        undoStack: undo.length > _historyLimit
+            ? undo.sublist(undo.length - _historyLimit)
+            : undo,
+        redoStack: const [],
+        selectedIndex: null,
+        activeSheet: EditorSheet.none,
+        tool: EditorTool.edit,
+        saveError: null,
+        infoMessage: null,
+      ),
+    );
+    HapticFeedback.mediumImpact();
+    _scheduleSave(updatedProject);
+  }
+
+  /// Changes the project's view-only [BeatFilter] without deleting any beats.
+  void setFilter(BeatFilter filter) {
+    final s = _ready;
+    if (s == null || s.project.detection.filter == filter) return;
+    final updatedProject = s.project.copyWith(
+      detection: s.project.detection.copyWith(filter: filter),
+    );
+    // Clear selection if the currently selected beat is hidden by the new filter.
+    var nextSelected = s.selectedIndex;
+    if (nextSelected != null) {
+      final visible = visibleBeatIndices(updatedProject);
+      if (!visible.contains(nextSelected)) {
+        nextSelected = null;
+      }
+    }
+    emit(s.copyWith(project: updatedProject, selectedIndex: nextSelected));
+    _scheduleSave(updatedProject);
+  }
+
+  void clearInfoMessage() {
+    final s = _ready;
+    if (s != null && s.infoMessage != null) {
+      emit(s.copyWith(infoMessage: null));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Beat editing
+  // ---------------------------------------------------------------------------
 
   /// Selects a marker and centres the playhead on it, or clears the
   /// selection when [index] is null.
@@ -469,6 +860,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   Future<void> close() async {
     if (_closing) return;
     _closing = true;
+    await _analysisCancelToken?.cancel();
     // Waits for any running save as well as the pending one.
     await _flushPendingSave();
     _zoom.removeListener(_ensureRawWindow);

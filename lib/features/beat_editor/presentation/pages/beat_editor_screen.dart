@@ -4,8 +4,10 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
 import '../../bloc/beat_editor_cubit.dart';
+import '../widgets/auto_detect_sheet.dart';
 import '../widgets/beat_inspector_panel.dart';
 import '../widgets/beat_timeline.dart';
+import '../widgets/detect_failed_sheet.dart';
 import '../widgets/edit_panel.dart';
 import '../widgets/editor_controls.dart';
 import '../widgets/editor_top_bar.dart';
@@ -39,17 +41,30 @@ class _BeatEditorView extends StatelessWidget {
     return Scaffold(
       backgroundColor: kv.background,
       body: BlocConsumer<BeatEditorCubit, BeatEditorState>(
-        listenWhen: (prev, curr) =>
-            curr is BeatEditorReady &&
-            curr.saveError != null &&
-            (prev is! BeatEditorReady || prev.saveError != curr.saveError),
+        listenWhen: (prev, curr) {
+          if (curr is! BeatEditorReady) return false;
+          final saveChanged =
+              curr.saveError != null &&
+              (prev is! BeatEditorReady || prev.saveError != curr.saveError);
+          final infoChanged =
+              curr.infoMessage != null &&
+              (prev is! BeatEditorReady ||
+                  prev.infoMessage != curr.infoMessage);
+          return saveChanged || infoChanged;
+        },
         listener: (context, state) {
-          if (state is BeatEditorReady && state.saveError != null) {
+          if (state is! BeatEditorReady) return;
+          if (state.saveError != null) {
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
                 SnackBar(content: Text('Could not save: ${state.saveError}')),
               );
+          } else if (state.infoMessage != null) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text(state.infoMessage!)));
+            context.read<BeatEditorCubit>().clearInfoMessage();
           }
         },
         builder: (context, state) => switch (state) {
@@ -112,31 +127,58 @@ class _EditorLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    return Column(
+    final cubit = context.read<BeatEditorCubit>();
+    final hasSheet = state.activeSheet != EditorSheet.none;
+
+    return Stack(
       children: [
-        SafeArea(bottom: false, child: EditorTopBar(state: state)),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: OverviewStrip(state: state, screenWidth: width),
+        Column(
+          children: [
+            SafeArea(bottom: false, child: EditorTopBar(state: state)),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: OverviewStrip(state: state, screenWidth: width),
+            ),
+            const SizedBox(height: 8),
+            // Ruler, section labels and waveform. 288 px tall on a 390×844 phone.
+            Expanded(child: BeatTimeline(state: state)),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  EditorChipsRow(state: state),
+                  const SizedBox(height: 10),
+                  TransportBar(state: state),
+                  const SizedBox(height: 14),
+                  SizedBox(height: 188, child: _contextPanel()),
+                ],
+              ),
+            ),
+            ToolTabBar(tool: state.tool),
+          ],
         ),
-        const SizedBox(height: 8),
-        // Ruler, section labels and waveform. 288 px tall on a 390×844 phone.
-        Expanded(child: BeatTimeline(state: state)),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            children: [
-              EditorChipsRow(state: state),
-              const SizedBox(height: 10),
-              TransportBar(state: state),
-              const SizedBox(height: 14),
-              SizedBox(height: 188, child: _contextPanel()),
-            ],
+        if (hasSheet) ...[
+          // Dim scrim matching `rgba(5,5,8,0.55)` in EditorAutoDetect / EditorDetectFailed.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: cubit.closeSheet,
+              child: Container(color: const Color(0x8C050508)),
+            ),
           ),
-        ),
-        ToolTabBar(tool: state.tool),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: switch (state.activeSheet) {
+              EditorSheet.autoDetect => AutoDetectSheet(state: state),
+              EditorSheet.detectFailed => const DetectFailedSheet(),
+              EditorSheet.none => const SizedBox.shrink(),
+            },
+          ),
+        ],
       ],
     );
   }

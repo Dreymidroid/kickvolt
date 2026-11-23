@@ -86,6 +86,18 @@ class BeatTimeline extends HookWidget {
                         pcm: cubit.pcmWindow,
                         colors: context.kv,
                         selectedIndex: selected,
+                        beatsOverride:
+                            state.activeSheet == EditorSheet.autoDetect
+                            ? state.previewBeats
+                            : null,
+                        filterOverride:
+                            state.activeSheet == EditorSheet.autoDetect
+                            ? state.previewFilter
+                            : null,
+                        sectionsOverride:
+                            state.activeSheet == EditorSheet.autoDetect
+                            ? state.previewSections
+                            : null,
                       ),
                     ),
                   ),

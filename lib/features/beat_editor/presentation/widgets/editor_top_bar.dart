@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../shared/shared.dart';
+import '../../../beat_detection/beat_detection.dart';
 import '../../bloc/beat_editor_cubit.dart';
 import 'timeline_painter.dart' show formatClock;
 
@@ -19,9 +20,10 @@ class EditorTopBar extends StatelessWidget {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
     final p = state.project;
-    final hasBeats = p.beatCount > 0;
+    final visibleCount = visibleBeatIndices(p).length;
+    final hasBeats = visibleCount > 0;
     final subtitle = hasBeats
-        ? '${p.beatCount} ${p.beatCount == 1 ? 'beat' : 'beats'} · '
+        ? '$visibleCount ${visibleCount == 1 ? 'beat' : 'beats'} · '
               '${p.bpm == null ? '– BPM' : '${_formatBpm(p.bpm!)} BPM'}'
         : '${formatClock(p.durationMs)} · no beats yet';
 
