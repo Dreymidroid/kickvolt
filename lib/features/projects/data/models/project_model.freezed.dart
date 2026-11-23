@@ -1201,7 +1201,7 @@ as int,
 /// @nodoc
 mixin _$DetectionSettingsModel {
 
- double get sensitivity; BeatFilter get filter;
+ double get sensitivity; BeatFilter get filter; DetectionStatus get status;
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1215,20 +1215,20 @@ $DetectionSettingsModelCopyWith<DetectionSettingsModel> get copyWith => _$Detect
 @override
 bool operator ==(Object other) {
   final _this = this as DetectionSettingsModel;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectionSettingsModel&&(identical(other.sensitivity, _this.sensitivity) || other.sensitivity == _this.sensitivity)&&(identical(other.filter, _this.filter) || other.filter == _this.filter));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectionSettingsModel&&(identical(other.sensitivity, _this.sensitivity) || other.sensitivity == _this.sensitivity)&&(identical(other.filter, _this.filter) || other.filter == _this.filter)&&(identical(other.status, _this.status) || other.status == _this.status));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DetectionSettingsModel;
-  return Object.hash(runtimeType,_this.sensitivity,_this.filter);
+  return Object.hash(runtimeType,_this.sensitivity,_this.filter,_this.status);
 }
 
 @override
 String toString() {
   final _this = this as DetectionSettingsModel;
-  return 'DetectionSettingsModel(sensitivity: ${_this.sensitivity}, filter: ${_this.filter})';
+  return 'DetectionSettingsModel(sensitivity: ${_this.sensitivity}, filter: ${_this.filter}, status: ${_this.status})';
 }
 
 
@@ -1239,7 +1239,7 @@ abstract mixin class $DetectionSettingsModelCopyWith<$Res>  {
   factory $DetectionSettingsModelCopyWith(DetectionSettingsModel value, $Res Function(DetectionSettingsModel) _then) = _$DetectionSettingsModelCopyWithImpl;
 @useResult
 $Res call({
- double sensitivity, BeatFilter filter
+ double sensitivity, BeatFilter filter, DetectionStatus status
 });
 
 
@@ -1256,11 +1256,12 @@ class _$DetectionSettingsModelCopyWithImpl<$Res>
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sensitivity = null,Object? filter = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,}) {
   return _then(DetectionSettingsModel(
 sensitivity: null == sensitivity ? _self.sensitivity : sensitivity // ignore: cast_nullable_to_non_nullable
 as double,filter: null == filter ? _self.filter : filter // ignore: cast_nullable_to_non_nullable
-as BeatFilter,
+as BeatFilter,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as DetectionStatus,
   ));
 }
 
@@ -1345,10 +1346,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel() when $default != null:
-return $default(_that.sensitivity,_that.filter);case _:
+return $default(_that.sensitivity,_that.filter,_that.status);case _:
   return orElse();
 
 }
@@ -1366,10 +1367,10 @@ return $default(_that.sensitivity,_that.filter);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)  $default,) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel():
-return $default(_that.sensitivity,_that.filter);case _:
+return $default(_that.sensitivity,_that.filter,_that.status);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1386,10 +1387,10 @@ return $default(_that.sensitivity,_that.filter);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double sensitivity,  BeatFilter filter)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)?  $default,) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel() when $default != null:
-return $default(_that.sensitivity,_that.filter);case _:
+return $default(_that.sensitivity,_that.filter,_that.status);case _:
   return null;
 
 }
@@ -1401,11 +1402,12 @@ return $default(_that.sensitivity,_that.filter);case _:
 @JsonSerializable()
 
 class _DetectionSettingsModel implements DetectionSettingsModel {
-  const _DetectionSettingsModel({this.sensitivity = 0.5, this.filter = BeatFilter.every});
+  const _DetectionSettingsModel({this.sensitivity = 0.5, this.filter = BeatFilter.every, this.status = DetectionStatus.notRun});
   factory _DetectionSettingsModel.fromJson(Map<String, dynamic> json) => _$DetectionSettingsModelFromJson(json);
 
 @override@JsonKey() final  double sensitivity;
 @override@JsonKey() final  BeatFilter filter;
+@override@JsonKey() final  DetectionStatus status;
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
@@ -1420,18 +1422,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectionSettingsModel&&(identical(other.sensitivity, sensitivity) || other.sensitivity == sensitivity)&&(identical(other.filter, filter) || other.filter == filter));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectionSettingsModel&&(identical(other.sensitivity, sensitivity) || other.sensitivity == sensitivity)&&(identical(other.filter, filter) || other.filter == filter)&&(identical(other.status, status) || other.status == status));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,sensitivity,filter);
+    return Object.hash(runtimeType,sensitivity,filter,status);
 }
 
 @override
 String toString() {
-    return 'DetectionSettingsModel(sensitivity: $sensitivity, filter: $filter)';
+    return 'DetectionSettingsModel(sensitivity: $sensitivity, filter: $filter, status: $status)';
 }
 
 
@@ -1442,7 +1444,7 @@ abstract mixin class _$DetectionSettingsModelCopyWith<$Res> implements $Detectio
   factory _$DetectionSettingsModelCopyWith(_DetectionSettingsModel value, $Res Function(_DetectionSettingsModel) _then) = __$DetectionSettingsModelCopyWithImpl;
 @override @useResult
 $Res call({
- double sensitivity, BeatFilter filter
+ double sensitivity, BeatFilter filter, DetectionStatus status
 });
 
 
@@ -1459,11 +1461,12 @@ class __$DetectionSettingsModelCopyWithImpl<$Res>
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sensitivity = null,Object? filter = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,}) {
   return _then(_DetectionSettingsModel(
 sensitivity: null == sensitivity ? _self.sensitivity : sensitivity // ignore: cast_nullable_to_non_nullable
 as double,filter: null == filter ? _self.filter : filter // ignore: cast_nullable_to_non_nullable
-as BeatFilter,
+as BeatFilter,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as DetectionStatus,
   ));
 }
 

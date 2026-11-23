@@ -202,6 +202,12 @@ class FakeDemoProjectRepository implements ProjectRepository {
   @override
   Future<String> songPath(String id) async => '/fake/projects/$id/song.wav';
 
+  @override
+  Future<void> writeProjectBinaryFile(
+    String targetPath,
+    List<int> bytes,
+  ) async {}
+
   /// No real file in tests; the editor falls back to the finest level.
   @override
   Future<PcmWindowLoader> openPcmWindow(String id) =>

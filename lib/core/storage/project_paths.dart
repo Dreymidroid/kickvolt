@@ -32,6 +32,9 @@ class ProjectPaths {
   /// Multi-level min/max waveform peaks for the editor.
   String peaksBin(String id) => p.join(projectDir(id), 'peaks.bin');
 
+  /// Cached beat-detection analysis (`analysis.bin`).
+  String analysisFile(String id) => p.join(projectDir(id), 'analysis.bin');
+
   String projectJson(String id) => p.join(projectDir(id), 'project.json');
 
   Future<Directory> createProjectDir(String id) =>

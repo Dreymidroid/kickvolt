@@ -51,6 +51,7 @@ dependencies:
   path: ^1.9.1
   just_audio: ^0.10.6
   audio_session: ^0.2.4
+  fftea: ^1.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

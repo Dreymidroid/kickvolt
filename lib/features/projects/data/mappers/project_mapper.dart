@@ -90,6 +90,7 @@ class ProjectMapper {
       detection: DetectionSettings(
         sensitivity: model.detection.sensitivity,
         filter: model.detection.filter,
+        status: model.detection.status,
       ),
       createdAt: model.createdAt.toUtc(),
       updatedAt: model.updatedAt.toUtc(),
@@ -139,6 +140,7 @@ class ProjectMapper {
       detection: DetectionSettingsModel(
         sensitivity: project.detection.sensitivity,
         filter: project.detection.filter,
+        status: project.detection.status,
       ),
       createdAt: project.createdAt.toUtc(),
       updatedAt: project.updatedAt.toUtc(),

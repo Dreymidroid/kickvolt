@@ -33,6 +33,10 @@ abstract interface class ProjectRepository {
   /// Absolute path of the project's decoded `song.wav` (for playback).
   Future<String> songPath(String id);
 
+  /// Atomically writes [bytes] to `<project>/<file>` under the repository's
+  /// serialized write lock.
+  Future<void> writeProjectBinaryFile(String targetPath, List<int> bytes);
+
   /// Reader for raw sample windows of `song.wav` (deep zoom). The caller
   /// disposes it.
   Future<PcmWindowLoader> openPcmWindow(String id);
@@ -211,6 +215,10 @@ class ProjectRepositoryImpl implements ProjectRepository {
 
   @override
   Future<String> songPath(String id) async => (await _paths()).songWav(id);
+
+  @override
+  Future<void> writeProjectBinaryFile(String targetPath, List<int> bytes) =>
+      _writeAtomicBytes(targetPath, bytes);
 
   @override
   Future<PcmWindowLoader> openPcmWindow(String id) async =>

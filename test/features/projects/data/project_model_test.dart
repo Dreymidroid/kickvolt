@@ -85,6 +85,39 @@ void main() {
     },
   );
 
+  test('M3-era project.json without detection.status loads with DetectionStatus.notRun and status round-trips', () {
+    final original = sampleProject().copyWith(
+      detection: const DetectionSettings(
+        sensitivity: 0.65,
+        filter: BeatFilter.strong,
+        status: DetectionStatus.succeeded,
+      ),
+    );
+    final fullJson = ProjectMapper.toJsonMap(original);
+    expect(
+      (fullJson['detection'] as Map<String, dynamic>)['status'],
+      'succeeded',
+    );
+
+    final roundTripped = ProjectMapper.fromJsonMap(
+      jsonDecode(jsonEncode(fullJson)) as Map<String, dynamic>,
+      projectId: original.id,
+    );
+    expect(roundTripped.detection.status, DetectionStatus.succeeded);
+
+    // Remove status key to simulate an M2/M3 project.json file.
+    final legacyJson = jsonDecode(jsonEncode(fullJson)) as Map<String, dynamic>;
+    (legacyJson['detection'] as Map<String, dynamic>).remove('status');
+
+    final legacyRestored = ProjectMapper.fromJsonMap(
+      legacyJson,
+      projectId: original.id,
+    );
+    expect(legacyRestored.detection.status, DetectionStatus.notRun);
+    expect(legacyRestored.detection.sensitivity, 0.65);
+    expect(legacyRestored.detection.filter, BeatFilter.strong);
+  });
+
   test(
     'Project derived getters compute expected values from sample indices',
     () {

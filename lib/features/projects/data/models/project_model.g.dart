@@ -117,6 +117,9 @@ _DetectionSettingsModel _$DetectionSettingsModelFromJson(
   filter:
       $enumDecodeNullable(_$BeatFilterEnumMap, json['filter']) ??
       BeatFilter.every,
+  status:
+      $enumDecodeNullable(_$DetectionStatusEnumMap, json['status']) ??
+      DetectionStatus.notRun,
 );
 
 Map<String, dynamic> _$DetectionSettingsModelToJson(
@@ -124,6 +127,7 @@ Map<String, dynamic> _$DetectionSettingsModelToJson(
 ) => <String, dynamic>{
   'sensitivity': instance.sensitivity,
   'filter': _$BeatFilterEnumMap[instance.filter]!,
+  'status': _$DetectionStatusEnumMap[instance.status]!,
 };
 
 const _$BeatFilterEnumMap = {
@@ -132,6 +136,12 @@ const _$BeatFilterEnumMap = {
   BeatFilter.drops: 'drops',
   BeatFilter.every2nd: 'every2nd',
   BeatFilter.every4th: 'every4th',
+};
+
+const _$DetectionStatusEnumMap = {
+  DetectionStatus.notRun: 'notRun',
+  DetectionStatus.succeeded: 'succeeded',
+  DetectionStatus.failed: 'failed',
 };
 
 _ProjectSummaryModel _$ProjectSummaryModelFromJson(Map<String, dynamic> json) =>

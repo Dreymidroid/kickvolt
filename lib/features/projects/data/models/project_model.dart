@@ -75,6 +75,7 @@ abstract class DetectionSettingsModel with _$DetectionSettingsModel {
   const factory DetectionSettingsModel({
     @Default(0.5) double sensitivity,
     @Default(BeatFilter.every) BeatFilter filter,
+    @Default(DetectionStatus.notRun) DetectionStatus status,
   }) = _DetectionSettingsModel;
 
   factory DetectionSettingsModel.fromJson(Map<String, dynamic> json) =>
