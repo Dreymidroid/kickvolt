@@ -211,3 +211,11 @@ Every milestone ends with: codegen if needed → `dart format .` → `flutter an
 - Spike: `image_picker_ios` uses PHPicker with `preferredAssetRepresentationMode = .current`, so videos arrive untranscoded.
 - **Not verified yet:** neither native side has been compiled. iOS needs Codemagic; the local Android build was blocked by a slow Gradle distribution download. No on-device test of decode yet.
 - Until M2, a successful import opens the editor with the demo song (projects aren't persisted yet).
+
+### M2 — Projects and persistence: done (2026-11-23)
+- Built by a separate agent from `docs/handoff/M2-projects-and-persistence.md`, verified here, then merged.
+- `projects` feature: `Project` entity in sample indices, one `project.json` per project plus `index.json` for Home, all written via `.tmp` + rename; `overview.bin` (~10 ms max-abs bins) computed in an isolate.
+- Import now creates the project; the editor loads/saves real projects (debounced, flushed on close) and handles 0 beats / unknown BPM. Home shows the project list with rename and delete.
+- Fix added during verification: saves are serialized (editor queue + repository locks) so an older edit can't overwrite a newer one.
+- **Known small issues for later:** beats and the playhead can sit at `sampleCount` (one past the last frame); clamp to `sampleCount - 1` before M6 export. Home rebuilds the index while a project folder has no `project.json` yet (slower, not wrong).
+- **Not verified on a device.** The local Android build is blocked by a corrupt Gradle download (`gradle-9.3.1-all.zip` is truncated at 150 MB).
