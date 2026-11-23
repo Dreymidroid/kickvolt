@@ -12,5 +12,6 @@ class AppRouter extends RootStackRouter {
     AutoRoute(page: HomeRoute.page, initial: true),
     AutoRoute(page: AnalyzingRoute.page),
     AutoRoute(page: BeatEditorRoute.page),
+    AutoRoute(page: LatencyCalibrationRoute.page),
   ];
 }

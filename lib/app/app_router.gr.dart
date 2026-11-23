@@ -191,3 +191,53 @@ class HomeRouteArgs {
   int get hashCode =>
       key.hashCode ^ projectsCubit.hashCode ^ pickerCubit.hashCode;
 }
+
+/// generated route for
+/// [LatencyCalibrationScreen]
+class LatencyCalibrationRoute
+    extends PageRouteInfo<LatencyCalibrationRouteArgs> {
+  LatencyCalibrationRoute({
+    Key? key,
+    LatencyCalibrationCubit? cubit,
+    List<PageRouteInfo>? children,
+  }) : super(
+         LatencyCalibrationRoute.name,
+         args: LatencyCalibrationRouteArgs(key: key, cubit: cubit),
+         initialChildren: children,
+       );
+
+  static const String name = 'LatencyCalibrationRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<LatencyCalibrationRouteArgs>(
+        orElse: () => const LatencyCalibrationRouteArgs(),
+      );
+      return LatencyCalibrationScreen(key: args.key, cubit: args.cubit);
+    },
+  );
+}
+
+class LatencyCalibrationRouteArgs {
+  const LatencyCalibrationRouteArgs({this.key, this.cubit});
+
+  final Key? key;
+
+  final LatencyCalibrationCubit? cubit;
+
+  @override
+  String toString() {
+    return 'LatencyCalibrationRouteArgs{key: $key, cubit: $cubit}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! LatencyCalibrationRouteArgs) return false;
+    return key == other.key && cubit == other.cubit;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ cubit.hashCode;
+}
