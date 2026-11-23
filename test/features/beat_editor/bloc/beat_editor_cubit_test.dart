@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+// ignore: depend_on_referenced_packages
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickvolt/features/beat_editor/beat_editor.dart';
 import 'package:kickvolt/features/projects/projects.dart';
@@ -38,7 +40,10 @@ void main() {
       expect(c.state, isA<BeatEditorReady>());
       expect(c.playheadSample, playhead15s);
       expect(player.openedPath, '/fake/projects/demo/song.wav');
-      expect(player.calls, ['seek ${playhead15s * 1000000 ~/ sampleRate}']);
+      expect(
+        player.calls,
+        contains('seek ${playhead15s * 1000000 ~/ sampleRate}'),
+      );
       await c.close();
     });
 
@@ -59,11 +64,16 @@ void main() {
       expect: () => [
         isA<BeatEditorReady>()
             .having((s) => s.project.beatCount, 'beats', 359)
-            .having((s) => s.undoStack.length, 'undo', 1),
+            .having((s) => s.canUndo, 'canUndo', isTrue)
+            .having((s) => s.canRedo, 'canRedo', isFalse),
         isA<BeatEditorReady>()
             .having((s) => s.project.beatCount, 'beats', 358)
-            .having((s) => s.redoStack.length, 'redo', 1),
-        isA<BeatEditorReady>().having((s) => s.project.beatCount, 'beats', 359),
+            .having((s) => s.canUndo, 'canUndo', isFalse)
+            .having((s) => s.canRedo, 'canRedo', isTrue),
+        isA<BeatEditorReady>()
+            .having((s) => s.project.beatCount, 'beats', 359)
+            .having((s) => s.canUndo, 'canUndo', isTrue)
+            .having((s) => s.canRedo, 'canRedo', isFalse),
       ],
     );
 
@@ -133,7 +143,7 @@ void main() {
       test('play shows Pause at once and follows the player', () async {
         c.togglePlay();
         expect((c.state as BeatEditorReady).playing, isTrue);
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.microtask(() {});
         expect(player.calls, ['play']);
 
         player.push(playing: true);
@@ -145,14 +155,14 @@ void main() {
       test('toggling while playing pauses', () async {
         player.push(playing: true);
         c.togglePlay();
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.microtask(() {});
         expect(player.calls, ['pause']);
       });
 
       test('speed is forwarded to the player', () async {
         c.setSpeed(0.75);
         expect((c.state as BeatEditorReady).speed, 0.75);
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.microtask(() {});
         expect(player.calls, ['speed 0.75']);
       });
 
@@ -162,7 +172,7 @@ void main() {
         c.scrubTo(sampleRate);
         c.scrubTo(3 * sampleRate);
         expect(c.playheadSample, 3 * sampleRate);
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.microtask(() {});
         expect(player.calls, ['pause']);
 
         await c.scrubEnd();
@@ -171,7 +181,7 @@ void main() {
 
       test('selecting a beat seeks to it', () async {
         c.selectBeat(32);
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.microtask(() {});
         expect(player.calls, ['seek 15000000']);
         expect(c.playheadSample, playhead15s);
       });
@@ -240,94 +250,105 @@ void main() {
       await c.close();
     });
 
-    test('debounces saveProject across rapid edits and flushes pending save on close()', () async {
-      final c = BeatEditorCubit(
-        playback: FakeAudioPlayback(),
-        repository: repo,
-        saveDebounce: const Duration(milliseconds: 40),
-      );
-      await c.load('demo', initialPlayheadSample: playhead15s);
+    test('debounces saveProject across rapid edits and flushes pending save on close()', () {
+      fakeAsync((async) {
+        final c = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          saveDebounce: const Duration(milliseconds: 500),
+        );
+        unawaited(c.load('demo', initialPlayheadSample: playhead15s));
+        async.flushMicrotasks();
 
-      c
-        ..selectBeat(32)
-        ..nudgeSelected(1)
-        ..nudgeSelected(1)
-        ..nudgeSelected(1);
-      // Still within debounce window: no save yet.
-      expect(repo.savedProjects, isEmpty);
+        c
+          ..selectBeat(32)
+          ..nudgeSelected(1)
+          ..nudgeSelected(1)
+          ..nudgeSelected(1);
+        // Still within debounce window: no save yet.
+        async.elapse(const Duration(milliseconds: 400));
+        expect(repo.savedProjects, isEmpty);
 
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      expect(repo.savedProjects.length, 1);
-      expect(repo.savedProjects.single.beats[32].sample, playhead15s + 44 * 3);
+        async.elapse(const Duration(milliseconds: 100));
+        expect(repo.savedProjects.length, 1);
+        expect(
+          repo.savedProjects.single.beats[32].sample,
+          playhead15s + 44 * 3,
+        );
 
-      // Edit again and immediately close before debounce fires -> flushed in close().
-      c.nudgeSelected(10);
-      expect(repo.savedProjects.length, 1);
-      await c.close();
-      expect(repo.savedProjects.length, 2);
-      expect(
-        repo.savedProjects.last.beats[32].sample,
-        playhead15s + 44 * 3 + 441,
-      );
+        // Edit again and immediately close before debounce fires -> flushed in close().
+        c.nudgeSelected(10);
+        expect(repo.savedProjects.length, 1);
+        unawaited(c.close());
+        async.flushMicrotasks();
+        expect(repo.savedProjects.length, 2);
+        expect(
+          repo.savedProjects.last.beats[32].sample,
+          playhead15s + 44 * 3 + 441,
+        );
+      });
     });
 
-    test('saves never overlap and land in edit order', () async {
-      // Hold the first save in flight until released.
-      final release = Completer<void>();
-      var gated = true;
-      repo.saveGate = () async {
-        if (gated) {
-          gated = false;
-          await release.future;
-        }
-      };
-      final c = BeatEditorCubit(
-        playback: FakeAudioPlayback(),
-        repository: repo,
-        saveDebounce: const Duration(milliseconds: 20),
-      );
-      await c.load('demo', initialPlayheadSample: playhead15s);
+    test('saves never overlap and land in edit order', () {
+      fakeAsync((async) {
+        final release = Completer<void>();
+        var gated = true;
+        repo.saveGate = () async {
+          if (gated) {
+            gated = false;
+            await release.future;
+          }
+        };
+        final c = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          saveDebounce: const Duration(milliseconds: 200),
+        );
+        unawaited(c.load('demo', initialPlayheadSample: playhead15s));
+        async.flushMicrotasks();
 
-      c
-        ..selectBeat(32)
-        ..nudgeSelected(1);
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-      // First save is now running and held. Edit again and close at once:
-      // the flush must wait for it rather than run alongside it.
-      c.nudgeSelected(10);
-      final closing = c.close();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(repo.savedProjects, isEmpty);
+        c
+          ..selectBeat(32)
+          ..nudgeSelected(1);
+        async.elapse(const Duration(milliseconds: 200));
+        // First save is now running and held. Edit again and close at once:
+        // the flush must wait for it rather than run alongside it.
+        c.nudgeSelected(10);
+        unawaited(c.close());
+        async.flushMicrotasks();
+        expect(repo.savedProjects, isEmpty);
 
-      release.complete();
-      await closing;
-      expect(repo.maxConcurrentSaves, 1);
-      expect(repo.savedProjects.map((p) => p.beats[32].sample), [
-        playhead15s + 44,
-        playhead15s + 44 + 441,
-      ]);
+        release.complete();
+        async.flushMicrotasks();
+        expect(repo.maxConcurrentSaves, 1);
+        expect(repo.savedProjects.map((p) => p.beats[32].sample), [
+          playhead15s + 44,
+          playhead15s + 44 + 441,
+        ]);
+      });
     });
 
-    test(
-      'failed save emits saveError without losing the in-memory edit',
-      () async {
+    test('failed save emits saveError without losing the in-memory edit', () {
+      fakeAsync((async) {
         repo.saveError = const ProjectCorruptException('disk full');
         final c = BeatEditorCubit(
           playback: FakeAudioPlayback(),
           repository: repo,
-          saveDebounce: const Duration(milliseconds: 20),
+          saveDebounce: const Duration(milliseconds: 200),
         );
-        await c.load('demo', initialPlayheadSample: playhead15s);
+        unawaited(c.load('demo', initialPlayheadSample: playhead15s));
+        async.flushMicrotasks();
         c
           ..selectBeat(32)
           ..nudgeSelected(10);
 
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        async.elapse(const Duration(milliseconds: 200));
         final s = c.state as BeatEditorReady;
         expect(s.project.beats[32].sample, playhead15s + 441);
         expect(s.saveError, 'disk full');
-        await c.close();
-      },
-    );
+        unawaited(c.close());
+        async.flushMicrotasks();
+      });
+    });
   });
 }

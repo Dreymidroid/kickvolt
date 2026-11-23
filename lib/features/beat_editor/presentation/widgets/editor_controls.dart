@@ -24,22 +24,31 @@ class EditorChipsRow extends StatelessWidget {
       height: 40,
       child: Row(
         children: [
-          KvChip(label: bpmLabel, mono: true, onPressed: () {}),
-          const SizedBox(width: 8),
-          KvChip(
-            label: 'Snap',
-            icon: KvIcons.magnet,
-            active: state.snap && bpm != null,
-            onPressed: bpm == null ? null : cubit.toggleSnap,
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  KvChip(label: bpmLabel, mono: true, onPressed: () {}),
+                  const SizedBox(width: 8),
+                  KvChip(
+                    label: 'Snap',
+                    icon: KvIcons.magnet,
+                    active: state.snap && bpm != null,
+                    onPressed: bpm == null ? null : cubit.toggleSnap,
+                  ),
+                  const SizedBox(width: 8),
+                  KvChip(
+                    label: 'Clicks',
+                    icon: KvIcons.volume,
+                    active: state.clicks,
+                    onPressed: cubit.toggleClicks,
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(width: 8),
-          KvChip(
-            label: 'Clicks',
-            icon: KvIcons.volume,
-            active: state.clicks,
-            onPressed: cubit.toggleClicks,
-          ),
-          const Spacer(),
           KvIcon(KvIcons.zoom, size: 14, color: kv.text3),
           const SizedBox(width: 4),
           ValueListenableBuilder<double>(

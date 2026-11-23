@@ -108,9 +108,11 @@ void main() {
         ..nudgeSelected(10)
         ..nudgeSelected(-1);
       expect(ready(c).project.beats[idx].sample, playhead15s + 441 + 441 - 44);
-      expect(ready(c).undoStack.length, 1);
+      expect(ready(c).canUndo, isTrue);
       c.undo();
       expect(ready(c).project.beats[idx].sample, playhead15s);
+      expect(ready(c).canUndo, isFalse);
+      expect(ready(c).selectedIndex, idx);
       await c.close();
     });
 

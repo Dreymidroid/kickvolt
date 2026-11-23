@@ -22,6 +22,9 @@ sealed class BeatEditorState with _$BeatEditorState {
     required PeakPyramid peaks,
     @Default(true) bool snap,
     @Default(false) bool clicks,
+
+    /// True while a pre-rendered click-preview WAV is being generated.
+    @Default(false) bool updatingClicks,
     @Default(1.0) double speed,
     @Default(false) bool playing,
 
@@ -31,8 +34,31 @@ sealed class BeatEditorState with _$BeatEditorState {
 
     /// Index into `project.beats` of the marker being edited, if any.
     int? selectedIndex,
-    @Default(<List<Beat>>[]) List<List<Beat>> undoStack,
-    @Default(<List<Beat>>[]) List<List<Beat>> redoStack,
+
+    /// Undo/redo availability driven by the cubit's `CommandStack`.
+    @Default(false) bool canUndo,
+    @Default(false) bool canRedo,
+
+    /// Beats tapped during the current play-to-pause run on the Tap tab,
+    /// displayed live on the waveform and committed as one `AddBeats` command.
+    @Default(<Beat>[]) List<Beat> tapRunBeats,
+
+    /// Effective tap latency compensation in milliseconds (calibrated value if
+    /// calibrated, otherwise iOS reported output latency rounded to ms, else 0).
+    @Default(0) int latencyOffsetMs,
+
+    /// Output route on which the stored latency offset was calibrated.
+    @Default(OutputKind.unknown) OutputKind latencyCalibratedOn,
+
+    /// Current audio output route reported by `OutputRouteService`.
+    @Default(OutputKind.unknown) OutputKind outputKind,
+
+    /// Bulk-tab selection range in sample frames (live UI state, not in stack).
+    int? bulkRangeStart,
+    int? bulkRangeEnd,
+
+    /// Bulk-tab pending shift amount in ms (`[-500, 500]`), reset after Apply.
+    @Default(0) int bulkShiftMs,
 
     /// Active sheet overlay (Auto-detect or No steady beat).
     @Default(EditorSheet.none) EditorSheet activeSheet,

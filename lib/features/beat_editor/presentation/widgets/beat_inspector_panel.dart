@@ -43,12 +43,19 @@ class BeatInspectorPanel extends StatelessWidget {
                 color: kv.text1,
               ),
             ),
-            const SizedBox(width: 10),
-            Text(
-              formatClock(state.project.sampleToMs(beat.sample), millis: true),
-              style: KvText.mono(size: 13, color: kv.text2),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                formatClock(
+                  state.project.sampleToMs(beat.sample),
+                  millis: true,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KvText.mono(size: 13, color: kv.text2),
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             _DeleteButton(onPressed: cubit.deleteSelected),
           ],
         ),
@@ -96,6 +103,7 @@ class _NudgeButton extends StatelessWidget {
     );
     return Semantics(
       button: true,
+      excludeSemantics: true,
       label:
           'Nudge ${left ? 'left' : 'right'} $amount '
           'millisecond${amount == 1 ? '' : 's'}',

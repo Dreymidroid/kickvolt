@@ -34,6 +34,20 @@ class BeatTimeline extends HookWidget {
             (_) => cubit.setViewportWidth(width),
           );
           final selected = state.selectedIndex;
+          final showBulk =
+              state.tool == EditorTool.bulk &&
+              state.bulkRangeStart != null &&
+              state.bulkRangeEnd != null;
+          final List<Beat>? beatsOverride;
+          if (state.activeSheet == EditorSheet.autoDetect) {
+            beatsOverride = state.previewBeats;
+          } else if (state.tapRunBeats.isNotEmpty) {
+            beatsOverride = [...state.project.beats, ...state.tapRunBeats]
+              ..sort((a, b) => a.sample.compareTo(b.sample));
+          } else {
+            beatsOverride = null;
+          }
+
           return Stack(
             children: [
               Positioned.fill(
@@ -50,6 +64,13 @@ class BeatTimeline extends HookWidget {
                         width: width,
                       ),
                     ),
+                    onLongPressStart: (d) {
+                      if (d.localPosition.dy < 52) return;
+                      final sampleAtPress =
+                          cubit.playheadSample +
+                          (d.localPosition.dx - width / 2) / cubit.pxPerSample;
+                      cubit.addBeatAtSample(sampleAtPress.round());
+                    },
                     onScaleStart: (d) {
                       zoomAtStart.value = cubit.zoom.value;
                       scrubSample.value = cubit.playheadSample.toDouble();
@@ -86,10 +107,7 @@ class BeatTimeline extends HookWidget {
                         pcm: cubit.pcmWindow,
                         colors: context.kv,
                         selectedIndex: selected,
-                        beatsOverride:
-                            state.activeSheet == EditorSheet.autoDetect
-                            ? state.previewBeats
-                            : null,
+                        beatsOverride: beatsOverride,
                         filterOverride:
                             state.activeSheet == EditorSheet.autoDetect
                             ? state.previewFilter
@@ -98,11 +116,31 @@ class BeatTimeline extends HookWidget {
                             state.activeSheet == EditorSheet.autoDetect
                             ? state.previewSections
                             : null,
+                        bulkRangeStart: showBulk ? state.bulkRangeStart : null,
+                        bulkRangeEnd: showBulk ? state.bulkRangeEnd : null,
                       ),
                     ),
                   ),
                 ),
               ),
+              if (showBulk)
+                ListenableBuilder(
+                  listenable: Listenable.merge([cubit.playhead, cubit.zoom]),
+                  builder: (context, _) => _BulkRangeHandlesOverlay(
+                    cubit: cubit,
+                    startSample: state.bulkRangeStart!,
+                    endSample: state.bulkRangeEnd!,
+                    width: width,
+                  ),
+                ),
+              if (state.clicks || state.updatingClicks)
+                Positioned(
+                  left: 16,
+                  bottom: 12,
+                  child: IgnorePointer(
+                    child: _ClicksStatusPill(updating: state.updatingClicks),
+                  ),
+                ),
               if (selected != null &&
                   selected >= 0 &&
                   selected < state.project.beats.length)
@@ -183,27 +221,35 @@ class BeatInfoCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Beat $number · ${beatTypeLabel(beat.type)}',
-                style: KvText.ui(
-                  size: 13,
-                  weight: FontWeight.w700,
-                  color: kv.text1,
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Beat $number · ${beatTypeLabel(beat.type)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KvText.ui(
+                    size: 13,
+                    weight: FontWeight.w700,
+                    color: kv.text1,
+                  ),
                 ),
-              ),
-              Text(
-                '${formatClock(timeMs, millis: true)}'
-                ' · ${snapped ? 'snapped' : 'off grid'}',
-                style: KvText.mono(size: 12, color: kv.text2),
-              ),
-            ],
+                Text(
+                  '${formatClock(timeMs, millis: true)}'
+                  ' · ${snapped ? 'snapped' : 'off grid'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: KvText.mono(size: 12, color: kv.text2),
+                ),
+              ],
+            ),
           ),
-          if (haptic != null)
+          if (haptic != null) ...[
+            const SizedBox(width: 6),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 KvIcon(KvIcons.vibrate, size: 16, color: kv.volt),
                 const SizedBox(width: 4),
@@ -217,6 +263,7 @@ class BeatInfoCard extends StatelessWidget {
                 ),
               ],
             ),
+          ],
         ],
       ),
     );
@@ -229,6 +276,108 @@ String beatTypeLabel(BeatType t) => switch (t) {
   BeatType.drop => 'Drop',
   BeatType.downbeat => 'Downbeat',
 };
+
+class _ClicksStatusPill extends StatelessWidget {
+  const _ClicksStatusPill({required this.updating});
+
+  final bool updating;
+
+  @override
+  Widget build(BuildContext context) {
+    final kv = context.kv;
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: kv.surface1.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kv.volt.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (updating)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2, color: kv.volt),
+            )
+          else
+            KvIcon(KvIcons.volume, size: 14, color: kv.volt),
+          const SizedBox(width: 6),
+          Text(
+            updating ? 'Updating clicks…' : 'Clicks on',
+            style: KvText.ui(size: 12, weight: FontWeight.w700, color: kv.volt),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BulkRangeHandlesOverlay extends StatelessWidget {
+  const _BulkRangeHandlesOverlay({
+    required this.cubit,
+    required this.startSample,
+    required this.endSample,
+    required this.width,
+  });
+
+  final BeatEditorCubit cubit;
+  final int startSample;
+  final int endSample;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final pps = cubit.pxPerSample;
+    final ph = cubit.playheadSample;
+    final startX = width / 2 + (startSample - ph) * pps;
+    final endX = width / 2 + (endSample - ph) * pps;
+
+    Widget handle({
+      required double x,
+      required String label,
+      required void Function(double deltaDx) onDrag,
+    }) {
+      if (x < -24 || x > width + 24) return const SizedBox.shrink();
+      return Positioned(
+        left: x - 22,
+        top: 52,
+        bottom: 0,
+        width: 44,
+        child: Semantics(
+          label: label,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        handle(
+          x: startX,
+          label: 'Range start handle',
+          onDrag: (dx) {
+            final nextStart = (startSample + dx / pps).round();
+            cubit.setBulkRange(math.min(nextStart, endSample), endSample);
+          },
+        ),
+        handle(
+          x: endX,
+          label: 'Range end handle',
+          onDrag: (dx) {
+            final nextEnd = (endSample + dx / pps).round();
+            cubit.setBulkRange(startSample, math.max(startSample, nextEnd));
+          },
+        ),
+      ],
+    );
+  }
+}
 
 class OverviewStrip extends StatelessWidget {
   const OverviewStrip({

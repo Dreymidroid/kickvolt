@@ -55,20 +55,25 @@ class EditorTopBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 1),
-                  Text(subtitle, style: KvText.mono(size: 12, color: kv.text2)),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: KvText.mono(size: 12, color: kv.text2),
+                  ),
                 ],
               ),
             ),
             KvIconButton(
               icon: KvIcons.undo,
               tooltip: 'Undo',
-              onPressed: state.undoStack.isEmpty ? null : cubit.undo,
+              onPressed: state.canUndo ? cubit.undo : null,
             ),
             const SizedBox(width: 2),
             KvIconButton(
               icon: KvIcons.redo,
               tooltip: 'Redo',
-              onPressed: state.redoStack.isEmpty ? null : cubit.redo,
+              onPressed: state.canRedo ? cubit.redo : null,
             ),
             const SizedBox(width: 6),
             Material(

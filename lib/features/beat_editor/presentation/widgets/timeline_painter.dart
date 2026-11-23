@@ -53,6 +53,8 @@ class TimelinePainter extends CustomPainter {
     this.beatsOverride,
     this.filterOverride,
     this.sectionsOverride,
+    this.bulkRangeStart,
+    this.bulkRangeEnd,
   }) : super(repaint: Listenable.merge([playhead, zoom, ?pcm])) {
     _beatLine.color = colors.volt.withValues(alpha: 0.5);
     _farBeatLine.color = colors.volt.withValues(alpha: 0.28);
@@ -85,6 +87,8 @@ class TimelinePainter extends CustomPainter {
   final List<Beat>? beatsOverride;
   final BeatFilter? filterOverride;
   final List<Section>? sectionsOverride;
+  final int? bulkRangeStart;
+  final int? bulkRangeEnd;
 
   List<Beat> get _effectiveBeats => beatsOverride ?? project.beats;
   BeatFilter get _effectiveFilter => filterOverride ?? project.detection.filter;
@@ -192,11 +196,85 @@ class TimelinePainter extends CustomPainter {
       ..save()
       ..clipRect(Rect.fromLTRB(0, -8, size.width, size.height));
     _paintSections(canvas, size, xOf, visibleFrom, visibleTo);
+    _paintBulkRangeFill(canvas, size, xOf);
     _paintRuler(canvas, xOf, pps, visibleFrom, visibleTo);
     _paintWaveform(canvas, size, ph, pps, visibleFrom);
     _paintBeats(canvas, size, xOf, pps, visibleFrom, visibleTo);
+    _paintBulkRangeHandles(canvas, size, xOf);
     canvas.restore();
     _paintPlayhead(canvas, size, cx, ph);
+  }
+
+  void _paintBulkRangeFill(Canvas canvas, Size size, double Function(num) xOf) {
+    final start = bulkRangeStart;
+    final end = bulkRangeEnd;
+    if (start == null || end == null) return;
+    final l = xOf(start).clamp(0.0, size.width);
+    final r = xOf(end).clamp(0.0, size.width);
+    if (r <= l) return;
+
+    final rect = Rect.fromLTRB(l, _tintTop, r, size.height);
+    canvas
+      ..save()
+      ..clipRect(rect);
+    final hatch = Paint()
+      ..color = colors.error.withValues(alpha: 0.12)
+      ..strokeWidth = 5;
+    final h = rect.height;
+    for (var x = l - h; x < r + h; x += 14) {
+      canvas.drawLine(Offset(x, _tintTop), Offset(x + h, size.height), hatch);
+    }
+    final border = Paint()
+      ..color = colors.error.withValues(alpha: 0.5)
+      ..strokeWidth = 1;
+    canvas
+      ..drawLine(Offset(l, _tintTop + 0.5), Offset(r, _tintTop + 0.5), border)
+      ..drawLine(
+        Offset(l, size.height - 0.5),
+        Offset(r, size.height - 0.5),
+        border,
+      )
+      ..restore();
+  }
+
+  void _paintBulkRangeHandles(
+    Canvas canvas,
+    Size size,
+    double Function(num) xOf,
+  ) {
+    final start = bulkRangeStart;
+    final end = bulkRangeEnd;
+    if (start == null || end == null) return;
+    final red = Paint()..color = colors.error;
+    final grip = Paint()
+      ..color = colors.onVolt
+      ..strokeWidth = 2;
+
+    for (final sample in [start, end]) {
+      final x = xOf(sample);
+      if (x < -20 || x > size.width + 20) continue;
+      canvas.drawRect(Rect.fromLTRB(x - 2, _tintTop, x + 2, size.height), red);
+      final pillTop = math.max(_tintTop, size.height - 36);
+      final pill = RRect.fromLTRBR(
+        x - 12,
+        pillTop,
+        x + 12,
+        size.height,
+        const Radius.circular(8),
+      );
+      canvas
+        ..drawRRect(pill, red)
+        ..drawLine(
+          Offset(x - 2.5, pillTop + 11),
+          Offset(x - 2.5, pillTop + 25),
+          grip,
+        )
+        ..drawLine(
+          Offset(x + 2.5, pillTop + 11),
+          Offset(x + 2.5, pillTop + 25),
+          grip,
+        );
+    }
   }
 
   void _paintSections(
@@ -628,6 +706,8 @@ class TimelinePainter extends CustomPainter {
       old.beatsOverride != beatsOverride ||
       old.filterOverride != filterOverride ||
       old.sectionsOverride != sectionsOverride ||
+      old.bulkRangeStart != bulkRangeStart ||
+      old.bulkRangeEnd != bulkRangeEnd ||
       old.colors != colors;
 }
 

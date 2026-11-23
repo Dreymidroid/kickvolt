@@ -7,10 +7,14 @@ import '../../bloc/beat_editor_cubit.dart';
 import '../widgets/auto_detect_sheet.dart';
 import '../widgets/beat_inspector_panel.dart';
 import '../widgets/beat_timeline.dart';
+import '../widgets/bulk_panel.dart';
 import '../widgets/detect_failed_sheet.dart';
 import '../widgets/edit_panel.dart';
 import '../widgets/editor_controls.dart';
 import '../widgets/editor_top_bar.dart';
+import '../widgets/playing_panel.dart';
+import '../widgets/sections_panel.dart';
+import '../widgets/tap_panel.dart';
 
 @RoutePage()
 class BeatEditorScreen extends StatelessWidget {
@@ -185,10 +189,14 @@ class _EditorLayout extends StatelessWidget {
 
   Widget _contextPanel() => switch (state.tool) {
     EditorTool.edit =>
-      state.selectedIndex == null
-          ? EditPanel(state: state)
-          : BeatInspectorPanel(state: state),
-    // Built in later screens: Auto sheet, Tap pad, Sections, Bulk.
-    _ => const SizedBox.shrink(),
+      state.selectedIndex != null
+          ? BeatInspectorPanel(state: state)
+          : state.playing
+          ? PlayingPanel(state: state)
+          : EditPanel(state: state),
+    EditorTool.tap => TapPanel(state: state),
+    EditorTool.sections => SectionsPanel(state: state),
+    EditorTool.bulk => BulkPanel(state: state),
+    EditorTool.auto => const SizedBox.shrink(),
   };
 }

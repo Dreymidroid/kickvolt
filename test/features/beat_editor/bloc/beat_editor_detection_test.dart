@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:typed_data';
 
+// ignore: depend_on_referenced_packages
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickvolt/features/beat_detection/beat_detection.dart';
 import 'package:kickvolt/features/beat_editor/beat_editor.dart';
@@ -78,88 +81,89 @@ void main() {
   BeatEditorReady ready(BeatEditorCubit c) => c.state as BeatEditorReady;
 
   group('Auto-detect sheet preview and commit', () {
-    test('preview updates previewBeats without saving or touching undo, and close restores', () async {
-      final c = BeatEditorCubit(
-        playback: FakeAudioPlayback(),
-        repository: repo,
-        detectionRepository: detectionRepo,
-        saveDebounce: const Duration(milliseconds: 20),
-      );
-      await c.load('demo');
-      final originalCount = ready(c).project.beatCount;
-
-      await c.openAutoDetectSheet();
-      expect(ready(c).activeSheet, EditorSheet.autoDetect);
-      expect(ready(c).previewBeats, detectedBeats);
-      expect(ready(c).previewBpm, 120.0);
-      expect(ready(c).project.beatCount, originalCount);
-      expect(ready(c).undoStack, isEmpty);
-
-      // Move sensitivity slider -> re-classifies synchronously, no save, no isolate.
-      c.setPreviewSensitivity(0.2);
-      expect(ready(c).previewBeats?.length, 3);
-      c.setPreviewFilter(BeatFilter.strong);
-      expect(ready(c).previewFilter, BeatFilter.strong);
-
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-      expect(repo.savedProjects, isEmpty);
-      expect(ready(c).undoStack, isEmpty);
-      verifyNever(
-        () => detectionRepo.analyze(
-          any(),
-          onProgress: any(named: 'onProgress'),
-          cancelToken: any(named: 'cancelToken'),
-          forceReanalyze: any(named: 'forceReanalyze'),
-        ),
-      );
-
-      // Close without committing -> restores original state.
-      c.closeSheet();
-      expect(ready(c).activeSheet, EditorSheet.none);
-      expect(ready(c).previewBeats, isNull);
-      expect(ready(c).project.beatCount, originalCount);
-      await c.close();
-    });
-
-    test(
-      'commit replaces beats, is undoable, and saves bpm/phase/sections/status',
-      () async {
+    test('preview updates previewBeats without saving or touching undo, and close restores', () {
+      fakeAsync((async) {
         final c = BeatEditorCubit(
           playback: FakeAudioPlayback(),
           repository: repo,
           detectionRepository: detectionRepo,
-          saveDebounce: const Duration(milliseconds: 20),
+          saveDebounce: const Duration(milliseconds: 200),
         );
-        await c.load('demo');
-        final originalBeats = ready(c).project.beats;
+        unawaited(c.load('demo'));
+        async.flushMicrotasks();
+        final originalCount = ready(c).project.beatCount;
 
-        await c.openAutoDetectSheet();
-        c.setPreviewSensitivity(0.7);
-        c.setPreviewFilter(BeatFilter.every2nd);
-        c.commitAutoDetect();
+        unawaited(c.openAutoDetectSheet());
+        async.flushMicrotasks();
+        expect(ready(c).activeSheet, EditorSheet.autoDetect);
+        expect(ready(c).previewBeats, detectedBeats);
+        expect(ready(c).previewBpm, 120.0);
+        expect(ready(c).project.beatCount, originalCount);
+        expect(ready(c).canUndo, isFalse);
 
-        final s = ready(c);
-        expect(s.activeSheet, EditorSheet.none);
-        expect(s.project.beats, detectedBeats);
-        expect(s.project.bpm, 120.0);
-        expect(s.project.beatPhaseSample, 500);
-        expect(s.project.sections, detectedSections);
-        expect(s.project.detection.sensitivity, 0.7);
-        expect(s.project.detection.filter, BeatFilter.every2nd);
-        expect(s.project.detection.status, DetectionStatus.succeeded);
-        expect(s.undoStack.length, 1);
+        // Move sensitivity slider -> re-classifies synchronously, no save, no isolate.
+        c.setPreviewSensitivity(0.2);
+        expect(ready(c).previewBeats?.length, 3);
+        c.setPreviewFilter(BeatFilter.strong);
+        expect(ready(c).previewFilter, BeatFilter.strong);
 
-        // Undo restores the previous beats.
-        c.undo();
-        expect(ready(c).project.beats, originalBeats);
+        async.elapse(const Duration(milliseconds: 500));
+        expect(repo.savedProjects, isEmpty);
+        expect(ready(c).canUndo, isFalse);
+        verifyNever(
+          () => detectionRepo.analyze(
+            any(),
+            onProgress: any(named: 'onProgress'),
+            cancelToken: any(named: 'cancelToken'),
+            forceReanalyze: any(named: 'forceReanalyze'),
+          ),
+        );
 
-        // close() flushes the pending debounced save, so this doesn't depend
-        // on timer timing under load.
-        await c.close();
-        expect(repo.savedProjects, isNotEmpty);
-        expect(repo.savedProjects.last.beats, originalBeats);
-      },
-    );
+        // Close without committing -> restores original state.
+        c.closeSheet();
+        expect(ready(c).activeSheet, EditorSheet.none);
+        expect(ready(c).previewBeats, isNull);
+        expect(ready(c).project.beatCount, originalCount);
+        unawaited(c.close());
+        async.flushMicrotasks();
+      });
+    });
+
+    test('commit replaces beats, and undo restores beats, bpm, phase, sections and detection', () async {
+      final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
+        repository: repo,
+        detectionRepository: detectionRepo,
+        saveDebounce: const Duration(milliseconds: 200),
+      );
+      await c.load('demo');
+      final originalProject = ready(c).project;
+
+      await c.openAutoDetectSheet();
+      c.setPreviewSensitivity(0.7);
+      c.setPreviewFilter(BeatFilter.every2nd);
+      c.commitAutoDetect();
+
+      final s = ready(c);
+      expect(s.activeSheet, EditorSheet.none);
+      expect(s.project.beats, detectedBeats);
+      expect(s.project.bpm, 120.0);
+      expect(s.project.beatPhaseSample, 500);
+      expect(s.project.sections, detectedSections);
+      expect(s.project.detection.sensitivity, 0.7);
+      expect(s.project.detection.filter, BeatFilter.every2nd);
+      expect(s.project.detection.status, DetectionStatus.succeeded);
+      expect(s.canUndo, isTrue);
+
+      // Undo restores ALL FIVE editable fields (M5 ReplaceAll fix).
+      c.undo();
+      expect(ready(c).project, originalProject);
+
+      // close() flushes the pending debounced save.
+      await c.close();
+      expect(repo.savedProjects, isNotEmpty);
+      expect(repo.savedProjects.last, originalProject);
+    });
   });
 
   group('Filter as a view', () {
@@ -175,13 +179,10 @@ void main() {
 
       c.setFilter(BeatFilter.drops);
       final p = ready(c).project;
-      // Underlying project.beats untouched.
       expect(p.beats.length, totalBefore);
-      // Visible set only contains the 3 drops.
       final visible = visibleBeatIndices(p);
       expect(visible.length, 3);
 
-      // Hidden beat (index 32 is BeatType.strong at 15 s) is not tappable.
       final hitHidden = TimelinePainter.beatAt(
         project: p,
         playheadSample: p.beats[32].sample,
@@ -192,7 +193,6 @@ void main() {
       );
       expect(hitHidden, isNull);
 
-      // Visible drop beat IS tappable and returns its index in project.beats.
       final dropIndex = visible.first;
       final hitDrop = TimelinePainter.beatAt(
         project: p,
@@ -233,7 +233,6 @@ void main() {
         await c.load('failed');
         expect(ready(c).activeSheet, EditorSheet.detectFailed);
 
-        // "Tap them in" switches to Tap tool and closes the sheet.
         c.tapBeatsFromFailedSheet();
         expect(ready(c).activeSheet, EditorSheet.none);
         expect(ready(c).tool, EditorTool.tap);
@@ -269,72 +268,79 @@ void main() {
       await c.close();
     });
 
-    test('markDropsOnly commits fallback drops when present, or emits infoMessage when none', () async {
-      final failedProject =
-          createDemoProject(
-            id: 'failed3',
+    test(
+      'markDropsOnly commits fallback drops and undo restores full state',
+      () async {
+        final failedProject =
+            createDemoProject(
+              id: 'failed3',
+              bpm: null,
+              includeBeats: false,
+            ).copyWith(
+              detection: const DetectionSettings(
+                sensitivity: 0.5,
+                status: DetectionStatus.failed,
+              ),
+            );
+        repo.put(failedProject);
+
+        const fallbackDrop = Beat(sample: 100000, type: BeatType.drop);
+        when(() => detectionRepo.classify(any(), any())).thenReturn(
+          const DetectionResult(
+            succeeded: false,
+            beats: [],
             bpm: null,
-            includeBeats: false,
-          ).copyWith(
-            detection: const DetectionSettings(
-              sensitivity: 0.5,
-              status: DetectionStatus.failed,
-            ),
-          );
-      repo.put(failedProject);
+            beatPhaseSample: null,
+            sections: [],
+            fallbackDrops: [fallbackDrop],
+          ),
+        );
 
-      // Case 1: fallback drops exist.
-      const fallbackDrop = Beat(sample: 100000, type: BeatType.drop);
-      when(() => detectionRepo.classify(any(), any())).thenReturn(
-        const DetectionResult(
-          succeeded: false,
-          beats: [],
-          bpm: null,
-          beatPhaseSample: null,
-          sections: [],
-          fallbackDrops: [fallbackDrop],
-        ),
-      );
+        final c1 = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          detectionRepository: detectionRepo,
+        );
+        await c1.load('failed3');
+        await c1.markDropsOnly();
 
-      final c1 = BeatEditorCubit(
-        playback: FakeAudioPlayback(),
-        repository: repo,
-        detectionRepository: detectionRepo,
-      );
-      await c1.load('failed3');
-      await c1.markDropsOnly();
+        expect(ready(c1).activeSheet, EditorSheet.none);
+        expect(ready(c1).project.beats, [fallbackDrop]);
+        expect(ready(c1).project.detection.filter, BeatFilter.drops);
+        expect(ready(c1).project.detection.status, DetectionStatus.succeeded);
+        expect(ready(c1).canUndo, isTrue);
 
-      expect(ready(c1).activeSheet, EditorSheet.none);
-      expect(ready(c1).project.beats, [fallbackDrop]);
-      expect(ready(c1).project.detection.filter, BeatFilter.drops);
-      expect(ready(c1).undoStack.length, 1);
-      await c1.close();
+        // Undo restores beats, filter, and failed status.
+        c1.undo();
+        expect(ready(c1).project, failedProject);
+        await c1.close();
 
-      // Case 2: no fallback drops -> shows infoMessage (SnackBar).
-      repo.put(failedProject);
-      when(() => detectionRepo.classify(any(), any())).thenReturn(
-        const DetectionResult(
-          succeeded: false,
-          beats: [],
-          bpm: null,
-          beatPhaseSample: null,
-          sections: [],
-          fallbackDrops: [],
-        ),
-      );
+        // Case 2: no fallback drops -> shows infoMessage (SnackBar).
+        repo.put(failedProject);
+        when(() => detectionRepo.classify(any(), any())).thenReturn(
+          const DetectionResult(
+            succeeded: false,
+            beats: [],
+            bpm: null,
+            beatPhaseSample: null,
+            sections: [],
+            fallbackDrops: [],
+          ),
+        );
 
-      final c2 = BeatEditorCubit(
-        playback: FakeAudioPlayback(),
-        repository: repo,
-        detectionRepository: detectionRepo,
-      );
-      await c2.load('failed3');
-      await c2.markDropsOnly();
+        final c2 = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          detectionRepository: detectionRepo,
+        );
+        await c2.load('failed3');
+        await c2.markDropsOnly();
 
-      expect(ready(c2).activeSheet, EditorSheet.none);
-      expect(ready(c2).infoMessage, isNotNull);
-      expect(ready(c2).project.beats, isEmpty);
-      await c2.close();
-    });
+        expect(ready(c2).activeSheet, EditorSheet.none);
+        expect(ready(c2).infoMessage, isNotNull);
+        expect(ready(c2).project.beats, isEmpty);
+        await c2.close();
+      },
+    );
   });
 }
