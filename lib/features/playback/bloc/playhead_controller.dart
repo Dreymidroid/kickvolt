@@ -18,7 +18,8 @@ class PlayheadController {
     int Function()? nowUs,
     this.onPlayingChanged,
     this.onCompleted,
-  }) : _nowUs = nowUs ?? _monotonicUs {
+  }) : _nowUs = nowUs ?? _monotonicUs,
+       _usingRealClock = nowUs == null {
     _sub = _playback.snapshots.listen(_onSnapshot);
   }
 
@@ -26,6 +27,7 @@ class PlayheadController {
   final int sampleRate;
   final int sampleCount;
   final int Function() _nowUs;
+  final bool _usingRealClock;
   final void Function(bool playing)? onPlayingChanged;
   final VoidCallback? onCompleted;
 
@@ -51,7 +53,41 @@ class PlayheadController {
 
   int usFromSamples(int s) => (s * 1e6 / sampleRate).round();
 
-  Future<void> open(String path) => _playback.open(path);
+  /// Exact extrapolated sample position at the moment of the call (used on
+  /// pointer-down for tap-to-mark and latency calibration so taps don't lag
+  /// behind the last painted frame).
+  int sampleNow() => samplesFromUs(_clock.positionUsAt(_nowUs()));
+
+  Future<void> open(String path, {Duration initialPosition = Duration.zero}) =>
+      _playback.open(path, initialPosition: initialPosition);
+
+  /// Swaps the underlying audio file at the current playhead position while
+  /// preserving [speed] and [wasPlaying] without jumping the playhead.
+  Future<void> swapSource(
+    String path, {
+    required double speed,
+    required bool wasPlaying,
+  }) async {
+    final currentSample = sampleNow().clamp(0, lastFrame);
+    final posUs = usFromSamples(currentSample);
+    _pendingSeeks++;
+    try {
+      _clock.jumpTo(posUs, wallUs: _nowUs(), advancing: false, speed: speed);
+      sample.value = currentSample;
+      await _playback.open(
+        path,
+        initialPosition: Duration(microseconds: posUs),
+      );
+      if (speed != 1.0) {
+        await _playback.setSpeed(speed);
+      }
+      if (wasPlaying && !_disposed) {
+        await _playback.play();
+      }
+    } finally {
+      _pendingSeeks--;
+    }
+  }
 
   Future<void> play() async {
     if (sample.value >= lastFrame) await seek(0);
@@ -105,8 +141,9 @@ class PlayheadController {
     // While a seek is in flight the player may still report the old spot.
     if (_pendingSeeks > 0 && !s.advancing) return;
 
-    final wall =
-        _nowUs() - DateTime.now().difference(s.updateTime).inMicroseconds;
+    final wall = _usingRealClock
+        ? _nowUs() - DateTime.now().difference(s.updateTime).inMicroseconds
+        : _nowUs();
     _clock.report(
       positionUs: s.position.inMicroseconds,
       wallUs: wall,

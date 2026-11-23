@@ -27,8 +27,8 @@ class PlaybackSnapshot {
 /// Plays one local audio file. An interface so the editor can be tested
 /// without a platform player.
 abstract interface class AudioPlayback {
-  /// Loads [path]. Throws if the file can't be played.
-  Future<void> open(String path);
+  /// Loads [path] at [initialPosition]. Throws if the file can't be played.
+  Future<void> open(String path, {Duration initialPosition = Duration.zero});
 
   /// Starts playing; returns once the request is sent (not when playback
   /// ends).

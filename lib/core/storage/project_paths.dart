@@ -35,10 +35,28 @@ class ProjectPaths {
   /// Cached beat-detection analysis (`analysis.bin`).
   String analysisFile(String id) => p.join(projectDir(id), 'analysis.bin');
 
+  /// Pre-rendered click-preview mix (`preview-<n>.wav`).
+  String previewWav(String id, int sequence) =>
+      p.join(projectDir(id), 'preview-$sequence.wav');
+
   String projectJson(String id) => p.join(projectDir(id), 'project.json');
 
   Future<Directory> createProjectDir(String id) =>
       Directory(projectDir(id)).create(recursive: true);
+
+  /// Deletes all `preview-*` files (including `.part` leftovers) in the project
+  /// directory, ignoring individual delete errors if a file is still open.
+  Future<void> deletePreviewFiles(String id) async {
+    final dir = Directory(projectDir(id));
+    if (!await dir.exists()) return;
+    await for (final entity in dir.list()) {
+      if (entity is File && p.basename(entity.path).startsWith('preview-')) {
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    }
+  }
 
   Future<void> deleteProject(String id) async {
     final dir = Directory(projectDir(id));

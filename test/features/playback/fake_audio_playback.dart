@@ -6,7 +6,9 @@ import 'package:kickvolt/features/playback/playback.dart';
 class FakeAudioPlayback implements AudioPlayback {
   final _controller = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final calls = <String>[];
+  final openedPaths = <String>[];
   String? openedPath;
+  Duration? openedInitialPosition;
   Object? openError;
   bool disposed = false;
 
@@ -31,9 +33,15 @@ class FakeAudioPlayback implements AudioPlayback {
   );
 
   @override
-  Future<void> open(String path) async {
+  Future<void> open(
+    String path, {
+    Duration initialPosition = Duration.zero,
+  }) async {
     if (openError != null) throw openError!;
     openedPath = path;
+    openedInitialPosition = initialPosition;
+    openedPaths.add(path);
+    calls.add('open $path @${initialPosition.inMicroseconds}');
   }
 
   @override

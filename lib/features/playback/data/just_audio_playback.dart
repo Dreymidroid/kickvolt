@@ -14,25 +14,34 @@ class JustAudioPlayback implements AudioPlayback {
   final AudioPlayer _player;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast();
   final _subs = <StreamSubscription<Object?>>[];
+  bool _initialized = false;
 
   @override
   Stream<PlaybackSnapshot> get snapshots => _snapshots.stream;
 
   @override
-  Future<void> open(String path) async {
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
-    _subs
-      ..add(
-        session.interruptionEventStream.listen((e) {
-          if (e.begin) _player.pause();
-        }),
-      )
-      ..add(session.becomingNoisyEventStream.listen((_) => _player.pause()))
-      ..add(_player.playbackEventStream.listen((_) => _emit(), onError: (_) {}))
-      ..add(_player.playingStream.listen((_) => _emit()))
-      ..add(_player.speedStream.listen((_) => _emit()));
-    await _player.setFilePath(path);
+  Future<void> open(
+    String path, {
+    Duration initialPosition = Duration.zero,
+  }) async {
+    if (!_initialized) {
+      _initialized = true;
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      _subs
+        ..add(
+          session.interruptionEventStream.listen((e) {
+            if (e.begin) _player.pause();
+          }),
+        )
+        ..add(session.becomingNoisyEventStream.listen((_) => _player.pause()))
+        ..add(
+          _player.playbackEventStream.listen((_) => _emit(), onError: (_) {}),
+        )
+        ..add(_player.playingStream.listen((_) => _emit()))
+        ..add(_player.speedStream.listen((_) => _emit()));
+    }
+    await _player.setFilePath(path, initialPosition: initialPosition);
   }
 
   void _emit() {
