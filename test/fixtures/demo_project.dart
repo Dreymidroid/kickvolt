@@ -177,11 +177,26 @@ class FakeDemoProjectRepository implements ProjectRepository {
     return createDemoOverview(sampleRate: p?.sampleRate ?? 44100);
   }
 
+  /// When set, each save waits on this before completing (to hold a save
+  /// "in flight").
+  Future<void> Function()? saveGate;
+
+  /// Highest number of saves running at the same time.
+  int maxConcurrentSaves = 0;
+  int _activeSaves = 0;
+
   @override
   Future<void> saveProject(Project project) async {
-    if (saveError != null) throw saveError!;
-    _projects[project.id] = project;
-    savedProjects.add(project);
+    _activeSaves++;
+    if (_activeSaves > maxConcurrentSaves) maxConcurrentSaves = _activeSaves;
+    try {
+      if (saveGate != null) await saveGate!();
+      if (saveError != null) throw saveError!;
+      _projects[project.id] = project;
+      savedProjects.add(project);
+    } finally {
+      _activeSaves--;
+    }
   }
 
   @override

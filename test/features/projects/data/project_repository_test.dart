@@ -97,6 +97,31 @@ void main() {
     expect(list.first.durationMs, 200);
   });
 
+  test(
+    'concurrent saves, rename and delete neither fail nor lose index entries',
+    () async {
+      final p1 = await repo.createFromImport(prepareImportedSong('p1'));
+      await repo.createFromImport(prepareImportedSong('p2', title: 'Two'));
+      await repo.createFromImport(prepareImportedSong('p3', title: 'Three'));
+
+      final titles = [for (var i = 0; i < 5; i++) 'Take $i'];
+      await Future.wait([
+        for (final t in titles) repo.saveProject(p1.copyWith(title: t)),
+        repo.renameProject('p2', 'Renamed'),
+        repo.deleteProject('p3'),
+      ]);
+
+      final list = await repo.listProjects();
+      expect({for (final s in list) s.id}, {'p1', 'p2'});
+      expect(titles, contains((await repo.getProject('p1')).title));
+      expect((await repo.getProject('p2')).title, 'Renamed');
+      final leftovers = docs
+          .listSync(recursive: true)
+          .where((e) => e.path.endsWith('.tmp'));
+      expect(leftovers, isEmpty);
+    },
+  );
+
   test('createFromImport deletes the project folder on failure', () async {
     Directory(paths.projectDir('bad')).createSync(recursive: true);
     File(paths.songWav('bad')).writeAsBytesSync('not a wav'.codeUnits);

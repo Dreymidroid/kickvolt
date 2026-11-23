@@ -41,6 +41,13 @@ class ProjectRepositoryImpl implements ProjectRepository {
   final Future<ProjectPaths> Function() _paths;
   final DateTime Function() _clock;
 
+  /// Atomic writes share `<name>.tmp`, so they must not interleave.
+  final _writeLock = _SerialLock();
+
+  /// Index updates are read-modify-write; serialize them so concurrent
+  /// saves, renames and deletes don't drop each other's entries.
+  final _indexLock = _SerialLock();
+
   @override
   Future<Project> createFromImport(ImportedSong song) async {
     final paths = await _paths();
@@ -121,7 +128,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       }
     }
 
-    return _rebuildIndex(paths, folderIds);
+    return _indexLock.run(() => _rebuildIndex(paths, folderIds));
   }
 
   @override
@@ -208,14 +215,16 @@ class ProjectRepositoryImpl implements ProjectRepository {
   Future<void> deleteProject(String id) async {
     final paths = await _paths();
     await paths.deleteProject(id);
-    final cached = await _tryReadIndex(paths);
-    if (cached != null) {
-      final remaining = [
-        for (final s in cached)
-          if (s.id != id) s,
-      ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      await _writeIndex(paths, remaining);
-    }
+    await _indexLock.run(() async {
+      final cached = await _tryReadIndex(paths);
+      if (cached != null) {
+        final remaining = [
+          for (final s in cached)
+            if (s.id != id) s,
+        ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        await _writeIndex(paths, remaining);
+      }
+    });
   }
 
   @override
@@ -300,18 +309,16 @@ class ProjectRepositoryImpl implements ProjectRepository {
     return thumbnail(ov, overviewThumbnailLength);
   }
 
-  Future<void> _upsertIndexEntry(
-    ProjectPaths paths,
-    ProjectSummary entry,
-  ) async {
-    final current = await _tryReadIndex(paths) ?? const <ProjectSummary>[];
-    final next = <ProjectSummary>[
-      entry,
-      for (final s in current)
-        if (s.id != entry.id) s,
-    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    await _writeIndex(paths, next);
-  }
+  Future<void> _upsertIndexEntry(ProjectPaths paths, ProjectSummary entry) =>
+      _indexLock.run(() async {
+        final current = await _tryReadIndex(paths) ?? const <ProjectSummary>[];
+        final next = <ProjectSummary>[
+          entry,
+          for (final s in current)
+            if (s.id != entry.id) s,
+        ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        await _writeIndex(paths, next);
+      });
 
   Future<List<ProjectSummary>?> _tryReadIndex(ProjectPaths paths) async {
     try {
@@ -426,7 +433,13 @@ class ProjectRepositoryImpl implements ProjectRepository {
 
   /// Writes [bytes] to `<targetPath>.tmp`, flushes to disk, and renames over
   /// [targetPath].
-  Future<void> _writeAtomicBytes(String targetPath, List<int> bytes) async {
+  Future<void> _writeAtomicBytes(String targetPath, List<int> bytes) =>
+      _writeLock.run(() => _writeAtomicBytesUnlocked(targetPath, bytes));
+
+  Future<void> _writeAtomicBytesUnlocked(
+    String targetPath,
+    List<int> bytes,
+  ) async {
     final tmpPath = '$targetPath.tmp';
     final tmpFile = File(tmpPath);
     await tmpFile.parent.create(recursive: true);
@@ -438,5 +451,17 @@ class ProjectRepositoryImpl implements ProjectRepository {
       await raf.close();
     }
     await tmpFile.rename(targetPath);
+  }
+}
+
+/// Runs async actions one at a time, in call order. A failed action doesn't
+/// block the ones queued after it.
+class _SerialLock {
+  Future<void> _tail = Future.value();
+
+  Future<T> run<T>(Future<T> Function() action) {
+    final result = _tail.then((_) => action());
+    _tail = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
   }
 }

@@ -28,7 +28,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
 
   Timer? _saveTimer;
   Project? _pendingSaveProject;
-  Future<void>? _inFlightSave;
+  Future<void> _saveQueue = Future.value();
 
   static const minZoom = 1.0;
   static const maxZoom = 16.0;
@@ -319,16 +319,21 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     _saveTimer = Timer(saveDebounce, _flushPendingSave);
   }
 
-  Future<void> _flushPendingSave() async {
+  /// Queues the pending snapshot behind any save already running, so saves
+  /// never overlap and always land in edit order. Returns the queue's tail.
+  Future<void> _flushPendingSave() {
     _saveTimer?.cancel();
     _saveTimer = null;
     final project = _pendingSaveProject;
-    if (project == null) return;
+    if (project == null) return _saveQueue;
     _pendingSaveProject = null;
+    return _saveQueue = _saveQueue.then((_) => _save(project));
+  }
+
+  /// Never throws, so one failed save doesn't stall the queue.
+  Future<void> _save(Project project) async {
     try {
-      final future = _repository.saveProject(project);
-      _inFlightSave = future;
-      await future;
+      await _repository.saveProject(project);
     } on ProjectException catch (e) {
       final cur = _ready;
       if (!isClosed && cur != null) {
@@ -339,20 +344,14 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
       if (!isClosed && cur != null) {
         emit(cur.copyWith(saveError: e.toString()));
       }
-    } finally {
-      _inFlightSave = null;
     }
   }
 
   @override
   Future<void> close() async {
     _stopTicker();
+    // Waits for any running save as well as the pending one.
     await _flushPendingSave();
-    if (_inFlightSave != null) {
-      try {
-        await _inFlightSave;
-      } catch (_) {}
-    }
     return super.close();
   }
 }

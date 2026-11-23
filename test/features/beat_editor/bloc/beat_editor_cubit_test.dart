@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickvolt/features/beat_editor/beat_editor.dart';
@@ -161,6 +163,42 @@ void main() {
         repo.savedProjects.last.beats[32].sample,
         playhead15s + 44 * 3 + 441,
       );
+    });
+
+    test('saves never overlap and land in edit order', () async {
+      // Hold the first save in flight until released.
+      final release = Completer<void>();
+      var gated = true;
+      repo.saveGate = () async {
+        if (gated) {
+          gated = false;
+          await release.future;
+        }
+      };
+      final c = BeatEditorCubit(
+        repository: repo,
+        saveDebounce: const Duration(milliseconds: 20),
+      );
+      await c.load('demo', initialPlayheadSample: playhead15s);
+
+      c
+        ..selectBeat(32)
+        ..nudgeSelected(1);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // First save is now running and held. Edit again and close at once:
+      // the flush must wait for it rather than run alongside it.
+      c.nudgeSelected(10);
+      final closing = c.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.savedProjects, isEmpty);
+
+      release.complete();
+      await closing;
+      expect(repo.maxConcurrentSaves, 1);
+      expect(repo.savedProjects.map((p) => p.beats[32].sample), [
+        playhead15s + 44,
+        playhead15s + 44 + 441,
+      ]);
     });
 
     test(
