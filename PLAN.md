@@ -229,3 +229,14 @@ Every milestone ends with: codegen if needed → `dart format .` → `flutter an
 - Also fixed: the playhead and new beats are clamped to `sampleCount - 1`.
 - **Measured:** recording a frame takes 0.5–2.2 ms in a debug (JIT) test build across all zoom levels with the demo song playing (budget at 60 fps: 16.7 ms). Not included: GPU raster time and real-device profile numbers.
 - **Not verified:** actual audio playback, the smoothing feel and 60 fps on a device. Still no Android build here (corrupt Gradle download), no device attached; iOS via Codemagic only.
+
+### M4 — Beat detection: done (2026-11-23)
+- Built by a separate agent from `docs/handoff/M4-beat-detection.md`, verified here, fixed, then merged.
+- Pure-Dart engine in `lib/features/beat_detection/`: streaming STFT (fftea, centered frames), spectral-flux onsets, prior-weighted tempo with octave checks, Ellis DP tracking, sample-accurate attack refinement. Classification (strong/downbeat/drop, sensitivity) and the filter are cheap views over a cached `analysis.bin`, so the Auto-detect sheet previews instantly. Sections and drops/downbeats are labelled heuristics.
+- Import runs detection with live Analyzing steps; "no steady beat" still opens the editor with the failed sheet.
+- Click-track accuracy: worst beat error < 0.5 ms and BPM exact on all 24 cases (90/120/128 × clean/noisy × 44.1/48 kHz × mono/stereo).
+- **Fixed during verification:**
+  - Detection depended on loudness. On a kick-on-1-and-3 groove, 128/140 BPM became 64/70 when the song was 12 dB quieter. Analysis now normalises the song's peak level first, and the half/double-tempo choice uses kick/snare onsets below 4 kHz instead of bass energy (which rewarded half tempo). New `music_detection_test.dart` covers 75–140 BPM grooves at 0/−12/−24 dB, a drumless acoustic track at four levels, and identical results across a 30 dB range.
+  - Cancelling analysis could leave `song.wav` open (a killed isolate never closes it), so the project folder couldn't be deleted on Windows. The file is now only open while being read, and the cooperative cancel gets 2 s before a hard kill.
+  - Visible-beat list computed once per painter, not every frame; one timing-dependent editor test made deterministic.
+- **Known limits:** 174 BPM drum-and-bass reads as 87 (genuinely ambiguous; the user can halve/double later). Still only synthetic audio tested; no real recordings on a device yet. Some older editor tests still wait on real time for debounced saves; they haven't flaked but could under heavy load.

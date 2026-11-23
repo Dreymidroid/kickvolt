@@ -64,8 +64,11 @@ Future<BeatAnalysis> runAnalysisInIsolate(
           // Ask the worker to throw AnalysisCancelledException at its next
           // chunk check so its `finally { await raf.close(); }` runs first.
           workerCancelPort!.send(true);
+          // The worker only sees the request when it next yields (at a file
+          // read), so give it time to finish a CPU-heavy step and close
+          // `song.wav` itself before forcing it.
           await exitCompleter.future.timeout(
-            const Duration(milliseconds: 120),
+            const Duration(seconds: 2),
             onTimeout: () {
               iso.kill(priority: Isolate.immediate);
             },

@@ -88,6 +88,13 @@ class TimelinePainter extends CustomPainter {
 
   List<Beat> get _effectiveBeats => beatsOverride ?? project.beats;
   BeatFilter get _effectiveFilter => filterOverride ?? project.detection.filter;
+
+  /// Indices of the beats the filter shows. The painter is rebuilt whenever
+  /// the beats or filter change, so this is computed once, not per frame.
+  late final List<int> _visible = visibleBeatIndicesForList(
+    _effectiveBeats,
+    _effectiveFilter,
+  );
   List<Section> get _effectiveSections => sectionsOverride ?? project.sections;
 
   static const _rulerLabelTop = 8.0;
@@ -367,7 +374,7 @@ class TimelinePainter extends CustomPainter {
   ) {
     final beats = _effectiveBeats;
     if (beats.isEmpty) return;
-    final visible = visibleBeatIndicesForList(beats, _effectiveFilter);
+    final visible = _visible;
     if (visible.isEmpty) return;
 
     final pad = 40 / pps;

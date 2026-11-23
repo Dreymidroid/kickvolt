@@ -71,6 +71,9 @@ Future<BeatAnalysis> analyzeWavFile(
   // every frame by +1024 samples (~23.2 ms at 44.1 kHz).
   final totalHops = (totalFrames + stftHopSize - 1) ~/ stftHopSize;
   final rawFlux = Float32List(totalHops);
+  // Flux of bins below 4 kHz only: kick and snare hits without hi-hats.
+  // Used to decide which pulse level is the beat (§4.3).
+  final rawLowMidFlux = Float32List(totalHops);
   final frameLowEnergy = Float32List(totalHops);
   final frameOverallEnergy = Float32List(totalHops);
 
@@ -79,6 +82,11 @@ Future<BeatAnalysis> analyzeWavFile(
   final fftBuf = Float64x2List(stftWindowSize);
   final numBins = (stftWindowSize >> 1) + 1; // 1025 positive-frequency bins
   final prevLogMag = Float32List(numBins);
+
+  final maxLowMidBin = math.min(
+    numBins - 1,
+    (4000.0 * stftWindowSize / sampleRate).floor(),
+  );
 
   // Bins strictly below 150 Hz for low-band energy L[t].
   final maxLowBin = math.min(
@@ -99,6 +107,7 @@ Future<BeatAnalysis> analyzeWavFile(
     fft.inPlaceFft(fftBuf);
 
     var flux = 0.0;
+    var lowMidFlux = 0.0;
     var lowE = 0.0;
     var totalE = 0.0;
 
@@ -118,12 +127,16 @@ Future<BeatAnalysis> analyzeWavFile(
       final logMag = math.log(1.0 + 1000.0 * normMag);
       if (hopIndex > 0) {
         final diff = logMag - prevLogMag[k];
-        if (diff > 0.0) flux += diff;
+        if (diff > 0.0) {
+          flux += diff;
+          if (k <= maxLowMidBin) lowMidFlux += diff;
+        }
       }
       prevLogMag[k] = logMag;
     }
 
     rawFlux[hopIndex] = flux;
+    rawLowMidFlux[hopIndex] = lowMidFlux;
     frameLowEnergy[hopIndex] = lowE;
     frameOverallEnergy[hopIndex] = totalE;
     hopIndex++;
@@ -133,8 +146,40 @@ Future<BeatAnalysis> analyzeWavFile(
     ringFill = stftWindowSize - stftHopSize; // 1536
   }
 
-  final raf = await file.open();
+  // `song.wav` is held open only while reading it (the envelope pass and
+  // the refinement pass), never during the CPU-heavy tempo/tracking steps.
+  // A cancelled isolate may be killed mid-step, and a killed isolate never
+  // runs its `finally`, so an open handle would linger (and on Windows keep
+  // the project folder from being deleted).
+  var raf = await file.open();
+  var rafOpen = true;
+  Future<void> closeRaf() async {
+    if (!rafOpen) return;
+    rafOpen = false;
+    await raf.close();
+  }
+
   try {
+    // Loudness normalisation: scale the mono mix so the song peaks at
+    // [_normalizedPeak]. The log compression, the flux gate and the low-band
+    // energies all depend on absolute level, so without this the same song
+    // detects differently when it's mastered quieter.
+    final peak = await _scanMonoPeak(raf, info, checkCancel);
+    if (peak == 0) {
+      return BeatAnalysis(
+        sampleRate: sampleRate,
+        sampleCount: totalFrames,
+        hopSize: stftHopSize,
+        bpm: 0,
+        confidence: 0,
+        beatPhaseSample: 0,
+        candidates: const <CandidateBeat>[],
+        frameLowEnergy: Float32List(totalHops),
+        frameOverallEnergy: Float32List(totalHops),
+      );
+    }
+    final gain = math.min(_maxNormalizeGain, _normalizedPeak * 32768 / peak);
+
     await raf.setPosition(info.dataOffset);
     final bpf = info.bytesPerFrame;
     final channels = info.channels;
@@ -156,7 +201,7 @@ Future<BeatAnalysis> analyzeWavFile(
       if (framesInChunk == 0) break;
 
       final bd = ByteData.sublistView(byteBuf, 0, framesInChunk * bpf);
-      const scale = 1.0 / 32768.0;
+      final scale = gain / 32768.0;
 
       if (channels == 1) {
         for (var f = 0; f < framesInChunk; f++) {
@@ -204,6 +249,7 @@ Future<BeatAnalysis> analyzeWavFile(
       }
       processOneStftFrame();
     }
+    await closeRaf();
 
     checkCancel();
 
@@ -231,9 +277,20 @@ Future<BeatAnalysis> analyzeWavFile(
     );
     checkCancel();
 
+    if (rawLowMidFlux.length > 4) {
+      rawLowMidFlux[0] = 0.0;
+      rawLowMidFlux[1] = 0.0;
+      rawLowMidFlux[rawLowMidFlux.length - 1] = 0.0;
+    }
+    final lowMidEnv = _computeOnsetEnvelope(
+      rawLowMidFlux,
+      sampleRate: sampleRate,
+      hopSize: stftHopSize,
+    );
+
     final tempoEst = _estimateTempo(
       onsetEnv,
-      frameLowEnergy: frameLowEnergy,
+      lowMidOnset: lowMidEnv,
       sampleRate: sampleRate,
       hopSize: stftHopSize,
     );
@@ -280,6 +337,8 @@ Future<BeatAnalysis> analyzeWavFile(
 
     // Refine each beat to exact attack sample using a short window of raw PCM
     // from the file via RandomAccessFile (§4.4).
+    raf = await file.open();
+    rafOpen = true;
     final candidates = await _refineBeatsToSample(
       raf: raf,
       info: info,
@@ -344,8 +403,55 @@ Future<BeatAnalysis> analyzeWavFile(
     );
     return analysis;
   } finally {
-    await raf.close();
+    await closeRaf();
   }
+}
+
+/// Peak level (of 1.0 full scale) every song is normalised to before analysis.
+const double _normalizedPeak = 0.9;
+
+/// Don't amplify near-silent files by more than this (+60 dB).
+const double _maxNormalizeGain = 1000;
+
+/// Largest absolute value of the mono mix, in 16-bit units. Streams the file
+/// in [maxPcmChunkBytes] chunks.
+Future<int> _scanMonoPeak(
+  RandomAccessFile raf,
+  WavInfo info,
+  void Function() checkCancel,
+) async {
+  await raf.setPosition(info.dataOffset);
+  final bpf = info.bytesPerFrame;
+  final channels = info.channels;
+  final buf = Uint8List((maxPcmChunkBytes ~/ bpf) * bpf);
+  var remaining = info.frameCount * bpf;
+  var peak = 0;
+  while (remaining > 0) {
+    checkCancel();
+    final want = math.min(remaining, buf.length);
+    var got = 0;
+    while (got < want) {
+      final n = await raf.readInto(buf, got, want);
+      if (n == 0) break;
+      got += n;
+    }
+    final frames = got ~/ bpf;
+    if (frames == 0) break;
+    final bd = ByteData.sublistView(buf, 0, frames * bpf);
+    var o = 0;
+    for (var f = 0; f < frames; f++) {
+      var sum = 0;
+      for (var c = 0; c < channels; c++) {
+        sum += bd.getInt16(o, Endian.little);
+        o += 2;
+      }
+      final v = (sum / channels).abs().round();
+      if (v > peak) peak = v;
+    }
+    remaining -= frames * bpf;
+    if (got < want) break;
+  }
+  return peak;
 }
 
 /// Thrown when an in-flight analysis is cancelled.
@@ -430,7 +536,7 @@ class _TempoEstimate {
 /// flat/random envelopes cannot produce a spurious ratio from the prior alone.
 _TempoEstimate _estimateTempo(
   Float32List onsetEnv, {
-  required Float32List frameLowEnergy,
+  required Float32List lowMidOnset,
   required int sampleRate,
   required int hopSize,
 }) {
@@ -465,17 +571,21 @@ _TempoEstimate _estimateTempo(
     return const _TempoEstimate(bpm: 0, periodFrames: 0, confidence: 0);
   }
 
-  // Also compute normalized low-band onset envelope to help disambiguate
-  // main kick periodicity (128 BPM) from 8th-note hi-hat subdivisions (256 BPM).
+  // Centered kick/snare (below 4 kHz) onset envelope. Its periodicity marks
+  // the beat level: kick and snare land on beats, hi-hats subdivide them.
+  // Using bass *energy* here instead rewarded half tempo on kick-on-1-and-3
+  // grooves (the kick alone repeats every two beats).
+  var meanL = 0.0;
+  for (var i = 0; i < n; i++) {
+    meanL += lowMidOnset[i];
+  }
+  meanL /= n;
   final lowFlux = Float32List(n);
   var lowR0 = 0.0;
-  for (var i = 1; i < n; i++) {
-    final d = frameLowEnergy[i] - frameLowEnergy[i - 1];
-    if (d > 0) {
-      final v = math.log(1.0 + d);
-      lowFlux[i] = v;
-      lowR0 += v * v;
-    }
+  for (var i = 0; i < n; i++) {
+    final v = lowMidOnset[i] - meanL;
+    lowFlux[i] = v;
+    lowR0 += v * v;
   }
 
   final rawAcf = Float64List(maxLag + 1);

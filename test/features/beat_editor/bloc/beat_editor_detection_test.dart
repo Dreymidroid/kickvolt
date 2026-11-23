@@ -153,9 +153,11 @@ void main() {
         c.undo();
         expect(ready(c).project.beats, originalBeats);
 
-        await Future<void>.delayed(const Duration(milliseconds: 40));
-        expect(repo.savedProjects, isNotEmpty);
+        // close() flushes the pending debounced save, so this doesn't depend
+        // on timer timing under load.
         await c.close();
+        expect(repo.savedProjects, isNotEmpty);
+        expect(repo.savedProjects.last.beats, originalBeats);
       },
     );
   });
