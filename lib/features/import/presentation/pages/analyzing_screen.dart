@@ -52,9 +52,15 @@ class AnalyzingView extends StatelessWidget {
         }
       },
       builder: (context, state) {
-        final (source, progress) = switch (state) {
-          ImportImporting(:final source, :final progress) => (source, progress),
-          _ => (null, 1.0),
+        final (source, progress, step, detectedBpm) = switch (state) {
+          ImportImporting(
+            :final source,
+            :final progress,
+            :final step,
+            :final detectedBpm,
+          ) =>
+            (source, progress, step, detectedBpm),
+          _ => (null, 1.0, ImportStep.sections, null),
         };
         return PopScope(
           canPop: state is! ImportImporting,
@@ -112,8 +118,11 @@ class AnalyzingView extends StatelessWidget {
                       style: KvText.ui(size: 15, color: kv.text2),
                     ),
                     const Spacer(flex: 3),
-                    // Only decoding exists so far; detection steps arrive in M4.
-                    _Steps(readingDone: progress >= 1),
+                    _Steps(
+                      step: step,
+                      allDone: progress >= 1.0,
+                      detectedBpm: detectedBpm,
+                    ),
                     const SizedBox(height: 36),
                     SizedBox(
                       width: double.infinity,
@@ -135,9 +144,21 @@ class AnalyzingView extends StatelessWidget {
 }
 
 class _Steps extends StatelessWidget {
-  const _Steps({required this.readingDone});
+  const _Steps({required this.step, required this.allDone, this.detectedBpm});
 
-  final bool readingDone;
+  final ImportStep step;
+  final bool allDone;
+  final double? detectedBpm;
+
+  _StepState _stateFor(ImportStep target) {
+    if (allDone || step.index > target.index) return _StepState.done;
+    if (step.index == target.index) return _StepState.active;
+    return _StepState.pending;
+  }
+
+  static String _formatBpm(double bpm) => bpm == bpm.roundToDouble()
+      ? '${bpm.round()} BPM'
+      : '${bpm.toStringAsFixed(1)} BPM';
 
   @override
   Widget build(BuildContext context) {
@@ -151,13 +172,14 @@ class _Steps extends StatelessWidget {
       ),
       child: Column(
         children: [
+          _Step('Reading the audio', _stateFor(ImportStep.reading)),
           _Step(
-            'Reading the audio',
-            readingDone ? _StepState.done : _StepState.active,
+            'Finding the tempo',
+            _stateFor(ImportStep.tempo),
+            trailing: detectedBpm != null ? _formatBpm(detectedBpm!) : null,
           ),
-          const _Step('Finding the tempo', _StepState.pending),
-          const _Step('Spotting strong beats and drops', _StepState.pending),
-          const _Step('Splitting into sections', _StepState.pending),
+          _Step('Spotting strong beats and drops', _stateFor(ImportStep.beats)),
+          _Step('Splitting into sections', _stateFor(ImportStep.sections)),
         ],
       ),
     );
@@ -167,10 +189,11 @@ class _Steps extends StatelessWidget {
 enum _StepState { pending, active, done }
 
 class _Step extends StatelessWidget {
-  const _Step(this.label, this.state);
+  const _Step(this.label, this.state, {this.trailing});
 
   final String label;
   final _StepState state;
+  final String? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +241,8 @@ class _Step extends StatelessWidget {
               ),
             ),
           ),
+          if (trailing != null)
+            Text(trailing!, style: KvText.mono(size: 14, color: kv.volt)),
         ],
       ),
     );

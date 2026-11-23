@@ -126,10 +126,10 @@ return cancelled(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PickedSource source,  double progress)?  importing,TResult Function( ImportedSong song)?  done,TResult Function( ImportFailure failure)?  failed,TResult Function()?  cancelled,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PickedSource source,  double progress,  ImportStep step,  double? detectedBpm)?  importing,TResult Function( ImportedSong song)?  done,TResult Function( ImportFailure failure)?  failed,TResult Function()?  cancelled,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ImportImporting() when importing != null:
-return importing(_that.source,_that.progress);case ImportDone() when done != null:
+return importing(_that.source,_that.progress,_that.step,_that.detectedBpm);case ImportDone() when done != null:
 return done(_that.song);case ImportFailed() when failed != null:
 return failed(_that.failure);case ImportCancelledState() when cancelled != null:
 return cancelled();case _:
@@ -150,10 +150,10 @@ return cancelled();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PickedSource source,  double progress)  importing,required TResult Function( ImportedSong song)  done,required TResult Function( ImportFailure failure)  failed,required TResult Function()  cancelled,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PickedSource source,  double progress,  ImportStep step,  double? detectedBpm)  importing,required TResult Function( ImportedSong song)  done,required TResult Function( ImportFailure failure)  failed,required TResult Function()  cancelled,}) {final _that = this;
 switch (_that) {
 case ImportImporting():
-return importing(_that.source,_that.progress);case ImportDone():
+return importing(_that.source,_that.progress,_that.step,_that.detectedBpm);case ImportDone():
 return done(_that.song);case ImportFailed():
 return failed(_that.failure);case ImportCancelledState():
 return cancelled();}
@@ -170,10 +170,10 @@ return cancelled();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PickedSource source,  double progress)?  importing,TResult? Function( ImportedSong song)?  done,TResult? Function( ImportFailure failure)?  failed,TResult? Function()?  cancelled,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PickedSource source,  double progress,  ImportStep step,  double? detectedBpm)?  importing,TResult? Function( ImportedSong song)?  done,TResult? Function( ImportFailure failure)?  failed,TResult? Function()?  cancelled,}) {final _that = this;
 switch (_that) {
 case ImportImporting() when importing != null:
-return importing(_that.source,_that.progress);case ImportDone() when done != null:
+return importing(_that.source,_that.progress,_that.step,_that.detectedBpm);case ImportDone() when done != null:
 return done(_that.song);case ImportFailed() when failed != null:
 return failed(_that.failure);case ImportCancelledState() when cancelled != null:
 return cancelled();case _:
@@ -188,11 +188,13 @@ return cancelled();case _:
 
 
 class ImportImporting implements ImportState {
-  const ImportImporting({required this.source, this.progress = 0.0});
+  const ImportImporting({required this.source, this.progress = 0.0, this.step = ImportStep.reading, this.detectedBpm});
   
 
  final  PickedSource source;
 @JsonKey() final  double progress;
+@JsonKey() final  ImportStep step;
+ final  double? detectedBpm;
 
 /// Create a copy of ImportState
 /// with the given fields replaced by the non-null parameter values.
@@ -204,18 +206,18 @@ $ImportImportingCopyWith<ImportImporting> get copyWith => _$ImportImportingCopyW
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ImportImporting&&(identical(other.source, source) || other.source == source)&&(identical(other.progress, progress) || other.progress == progress));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ImportImporting&&(identical(other.source, source) || other.source == source)&&(identical(other.progress, progress) || other.progress == progress)&&(identical(other.step, step) || other.step == step)&&(identical(other.detectedBpm, detectedBpm) || other.detectedBpm == detectedBpm));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,source,progress);
+    return Object.hash(runtimeType,source,progress,step,detectedBpm);
 }
 
 @override
 String toString() {
-    return 'ImportState.importing(source: $source, progress: $progress)';
+    return 'ImportState.importing(source: $source, progress: $progress, step: $step, detectedBpm: $detectedBpm)';
 }
 
 
@@ -226,7 +228,7 @@ abstract mixin class $ImportImportingCopyWith<$Res> implements $ImportStateCopyW
   factory $ImportImportingCopyWith(ImportImporting value, $Res Function(ImportImporting) _then) = _$ImportImportingCopyWithImpl;
 @useResult
 $Res call({
- PickedSource source, double progress
+ PickedSource source, double progress, ImportStep step, double? detectedBpm
 });
 
 
@@ -243,11 +245,13 @@ class _$ImportImportingCopyWithImpl<$Res>
 
 /// Create a copy of ImportState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? source = null,Object? progress = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? source = null,Object? progress = null,Object? step = null,Object? detectedBpm = freezed,}) {
   return _then(ImportImporting(
 source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
 as PickedSource,progress: null == progress ? _self.progress : progress // ignore: cast_nullable_to_non_nullable
-as double,
+as double,step: null == step ? _self.step : step // ignore: cast_nullable_to_non_nullable
+as ImportStep,detectedBpm: freezed == detectedBpm ? _self.detectedBpm : detectedBpm // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
