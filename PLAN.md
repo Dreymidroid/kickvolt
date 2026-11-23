@@ -219,3 +219,13 @@ Every milestone ends with: codegen if needed → `dart format .` → `flutter an
 - Fix added during verification: saves are serialized (editor queue + repository locks) so an older edit can't overwrite a newer one.
 - **Known small issues for later:** beats and the playhead can sit at `sampleCount` (one past the last frame); clamp to `sampleCount - 1` before M6 export. Home rebuilds the index while a project folder has no `project.json` yet (slower, not wrong).
 - **Not verified on a device.** The local Android build is blocked by a corrupt Gradle download (`gradle-9.3.1-all.zip` is truncated at 150 MB).
+
+### M3 — Waveform and playback: done (2026-11-23)
+- **Packages:** `just_audio` 0.10.6 (AVPlayer / ExoPlayer, local files, `setSpeed`, `PlaybackEvent.updatePosition/updateTime` anchors) and `audio_session` 0.2.4 (music session; pause on interruptions and on headphones unplugged).
+- **Peaks:** `peaks.bin` holds mono min/max at 64/256/1024/4096/16384 frames per bucket (~2.4 MB for 10 min at 48 kHz). It's built in an isolate during import, alongside `overview.bin`, or on first open for M2-era projects. Below 64 frames per bar the painter reads exact samples through `PcmWindowLoader` (small async reads from `song.wav`).
+- **Zoom:** from the whole song across the screen down to 20 ms per screen width (about 1,500× at 390 px).
+- **Playback:** `PlayheadController` + `PlayheadClock` give a smoothed, never-backwards playhead updated once per display frame. Small drift is blended in over 250 ms; seeks and stalls jump. The playhead and zoom are `ValueListenable`s that the painters listen to directly, so playing or pinching doesn't rebuild widgets. Dragging scrubs the playhead and seeks the audio on release (pausing and resuming around the drag).
+- **Painter:** columns sit on a fixed frame grid (no shimmer while scrolling); bars are drawn with `drawRawPoints`; paints and text layouts are cached; markers simplify and thin out when they're closer than 14 px / 4 px; ruler has sub-second steps.
+- Also fixed: the playhead and new beats are clamped to `sampleCount - 1`.
+- **Measured:** recording a frame takes 0.5–2.2 ms in a debug (JIT) test build across all zoom levels with the demo song playing (budget at 60 fps: 16.7 ms). Not included: GPU raster time and real-device profile numbers.
+- **Not verified:** actual audio playback, the smoothing feel and 60 fps on a device. Still no Android build here (corrupt Gradle download), no device attached; iOS via Codemagic only.

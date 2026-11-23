@@ -3,6 +3,7 @@ import 'package:kickvolt/features/beat_editor/beat_editor.dart';
 import 'package:kickvolt/features/projects/projects.dart';
 
 import '../../../fixtures/demo_project.dart';
+import '../../playback/fake_audio_playback.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +19,7 @@ void main() {
     String id = 'demo',
     int initialPlayheadSample = playhead15s,
   }) async {
-    final c = BeatEditorCubit(repository: repo);
+    final c = BeatEditorCubit(playback: FakeAudioPlayback(), repository: repo);
     await c.load(id, initialPlayheadSample: initialPlayheadSample);
     return c;
   }
@@ -35,7 +36,7 @@ void main() {
         ..seekTo(9 * sampleRate)
         ..selectBeat(idx);
       expect(ready(c).selectedIndex, idx);
-      expect(ready(c).playheadSample, playhead15s);
+      expect(c.playheadSample, playhead15s);
       await c.close();
     });
 
@@ -66,7 +67,7 @@ void main() {
           ..selectBeat(idx)
           ..nudgeSelected(10); // +10 ms at 44.1 kHz = +441 frames
         expect(ready(c).project.beats[idx].sample, playhead15s + 441);
-        expect(ready(c).playheadSample, playhead15s + 441);
+        expect(c.playheadSample, playhead15s + 441);
         await c.close();
       },
     );

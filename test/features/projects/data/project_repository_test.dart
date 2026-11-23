@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickvolt/core/audio_math/overview.dart';
+import 'package:kickvolt/core/audio_math/peaks.dart';
 import 'package:kickvolt/core/audio_math/wav_header.dart';
 import 'package:kickvolt/core/storage/project_paths.dart';
 import 'package:kickvolt/features/import/import.dart';
@@ -119,6 +120,29 @@ void main() {
           .listSync(recursive: true)
           .where((e) => e.path.endsWith('.tmp'));
       expect(leftovers, isEmpty);
+    },
+  );
+
+  test(
+    'createFromImport writes peaks.bin; getPeaks reads it or rebuilds it',
+    () async {
+      await repo.createFromImport(prepareImportedSong('p1', frameCount: 8820));
+      final file = File(paths.peaksBin('p1'));
+      expect(file.existsSync(), isTrue);
+
+      final peaks = await repo.getPeaks('p1');
+      expect(peaks.frameCount, 8820);
+      expect(peaks.levels.map((l) => l.framesPerBucket), peakLevelFrames);
+      // First frame of the left channel is 16384, right is 0: mono mix 8192.
+      expect(peaks.levels.first.data[1], 8192);
+
+      // A missing or corrupt cache is rebuilt from song.wav and rewritten.
+      file.writeAsBytesSync([1, 2, 3]);
+      final rebuilt = await repo.getPeaks('p1');
+      expect(rebuilt.levels.first.data, peaks.levels.first.data);
+      expect(decodePeaks(file.readAsBytesSync()).frameCount, 8820);
+
+      expect(await repo.songPath('p1'), paths.songWav('p1'));
     },
   );
 

@@ -1,15 +1,14 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../../core/audio_math/overview.dart';
+import '../../../../core/audio_math/pcm_window_loader.dart';
+import '../../../../core/audio_math/peaks.dart';
 import '../../../../shared/shared.dart';
 import '../../../projects/projects.dart';
-
-/// Pixels per second at 1× zoom. 4× (the default) = 51.2 px/s, which puts
-/// beats 24 px apart at 128 BPM, as in the design.
-const double kPxPerSecondAt1x = 12.8;
+import '../../bloc/beat_editor_cubit.dart';
 
 String formatClock(int ms, {bool millis = false}) {
   final safeMs = math.max(0, ms);
@@ -19,23 +18,64 @@ String formatClock(int ms, {bool millis = false}) {
   return millis ? '$base.${(safeMs % 1000).toString().padLeft(3, '0')}' : base;
 }
 
+/// Lays out text once and reuses it across frames.
+class _TextCache {
+  final _cache = <String, TextPainter>{};
+
+  TextPainter get(String key, String text, TextStyle style) {
+    final hit = _cache[key];
+    if (hit != null) return hit;
+    if (_cache.length > 400) _cache.clear();
+    return _cache[key] = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+  }
+}
+
 /// Ruler, section tints + labels, waveform, beat markers and the fixed
 /// centre playhead. Vertical offsets mirror screens/EditorDetected.html
 /// (this widget starts at y=144 of the 844 frame).
+///
+/// Repaints from [playhead], [zoom] and [pcm] directly, so playback and
+/// pinch-zoom never rebuild widgets. Nothing here allocates per bar or per
+/// beat on a normal frame.
 class TimelinePainter extends CustomPainter {
   TimelinePainter({
     required this.project,
-    required this.overview,
-    required this.playheadSample,
+    required this.peaks,
+    required this.playhead,
     required this.zoom,
     required this.colors,
+    this.pcm,
     this.selectedIndex,
-  });
+  }) : super(repaint: Listenable.merge([playhead, zoom, ?pcm])) {
+    _beatLine.color = colors.volt.withValues(alpha: 0.5);
+    _farBeatLine.color = colors.volt.withValues(alpha: 0.28);
+    _beatDot.color = colors.volt.withValues(alpha: 0.75);
+    _glow
+      ..color = colors.voltGlow
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    _solid.color = colors.volt;
+    _downbeatSolid.color = Color.lerp(colors.volt, Colors.white, 0.35)!;
+    _waveGlow
+      ..color = colors.waveGlow
+      ..strokeWidth = _barWidth + 3
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    _played
+      ..color = colors.wavePlayed
+      ..strokeWidth = _barWidth;
+    _unplayed
+      ..color = colors.waveUnplayed
+      ..strokeWidth = _barWidth;
+    _tick.color = colors.text3;
+  }
 
   final Project project;
-  final Overview overview;
-  final int playheadSample;
-  final double zoom;
+  final PeakPyramid peaks;
+  final ValueListenable<int> playhead;
+  final ValueListenable<double> zoom;
+  final PcmWindowLoader? pcm;
   final KvColors colors;
   final int? selectedIndex;
 
@@ -54,14 +94,36 @@ class TimelinePainter extends CustomPainter {
   static const _bubbleTop = -2.0;
 
   static const _barWidth = 2.0;
-  static const _barStep = 3.0;
 
   static const _selectedLineTop = 72.0;
   static const _ringCenterY = 65.0;
   static const _ringRadius = 15.0;
 
-  double get pxPerSample =>
-      zoom * kPxPerSecondAt1x / math.max(1, project.sampleRate);
+  /// Below this spacing, markers are drawn as plain lines (no pills/dots).
+  static const _detailedBeatSpacingPx = 14.0;
+
+  /// When zoomed far out, lines closer than this are skipped.
+  static const _minLineGapPx = 4.0;
+
+  final _text = _TextCache();
+  final _beatLine = Paint();
+  final _farBeatLine = Paint();
+  final _beatDot = Paint();
+  final _glow = Paint();
+  final _solid = Paint();
+  final _downbeatSolid = Paint();
+  final _waveGlow = Paint();
+  final _played = Paint();
+  final _unplayed = Paint();
+  final _tick = Paint();
+
+  Float32List _mins = Float32List(0);
+  Float32List _maxs = Float32List(0);
+  Float32List _playedPts = Float32List(0);
+  Float32List _unplayedPts = Float32List(0);
+
+  double _pxPerSample(double z) =>
+      z * kPxPerSecondAt1x / math.max(1, project.sampleRate);
 
   /// Index of the marker under a tap at [dx], or null if none is within
   /// [slopPx]. Taps above the section tint (ruler, labels) are ignored.
@@ -72,7 +134,7 @@ class TimelinePainter extends CustomPainter {
     required double dx,
     required double dy,
     required double width,
-    // Under half the 24 px beat spacing at 4×, so empty space between
+    // Under half the 24 px beat spacing at 4x, so empty space between
     // markers stays tappable (deselects). Zoom in for finer targets.
     double slopPx = 10,
   }) {
@@ -97,17 +159,22 @@ class TimelinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final ph = playhead.value;
+    final pps = _pxPerSample(zoom.value);
     final cx = size.width / 2;
-    final pps = pxPerSample;
-    double xOf(num sample) => cx + (sample - playheadSample) * pps;
-    final visibleFrom = playheadSample - cx / pps;
-    final visibleTo = playheadSample + cx / pps;
+    double xOf(num sample) => cx + (sample - ph) * pps;
+    final visibleFrom = ph - cx / pps;
+    final visibleTo = ph + cx / pps;
 
+    canvas
+      ..save()
+      ..clipRect(Rect.fromLTRB(0, -8, size.width, size.height));
     _paintSections(canvas, size, xOf, visibleFrom, visibleTo);
-    _paintRuler(canvas, size, xOf, visibleFrom, visibleTo);
-    _paintWaveform(canvas, size, cx, visibleFrom, visibleTo);
-    _paintBeats(canvas, size, xOf, visibleFrom, visibleTo);
-    _paintPlayhead(canvas, size, cx);
+    _paintRuler(canvas, xOf, pps, visibleFrom, visibleTo);
+    _paintWaveform(canvas, size, ph, pps, visibleFrom);
+    _paintBeats(canvas, size, xOf, pps, visibleFrom, visibleTo);
+    canvas.restore();
+    _paintPlayhead(canvas, size, cx, ph);
   }
 
   void _paintSections(
@@ -139,8 +206,10 @@ class TimelinePainter extends CustomPainter {
         );
       }
 
-      final tp = _text(
-        s.name.toUpperCase(),
+      final label = s.name.toUpperCase();
+      final tp = _text.get(
+        'sec:$label:${s.colorArgb}',
+        label,
         KvText.ui(
           size: 11,
           weight: FontWeight.w700,
@@ -168,98 +237,154 @@ class TimelinePainter extends CustomPainter {
     }
   }
 
+  /// Ruler steps in milliseconds; the first one at least 45 px apart wins.
+  static const _rulerStepsMs = [
+    10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 15000, 30000, //
+    60000, 120000, 300000, 600000,
+  ];
+
   void _paintRuler(
     Canvas canvas,
-    Size size,
     double Function(num) xOf,
+    double pps,
     double fromSample,
     double toSample,
   ) {
-    const steps = [1, 2, 5, 10, 15, 30, 60];
     final rate = math.max(1, project.sampleRate);
-    final pxPerSec = pxPerSample * rate;
-    final step = steps.firstWhere((s) => s * pxPerSec >= 45, orElse: () => 120);
-    final tick = Paint()..color = colors.text3;
+    final pxPerMs = pps * rate / 1000;
+    final step = _rulerStepsMs.firstWhere(
+      (s) => s * pxPerMs >= 45,
+      orElse: () => _rulerStepsMs.last,
+    );
+    final millis = step < 1000;
     final style = KvText.mono(size: 11, color: colors.text3);
-    var sec = ((fromSample / rate) / step).floor() * step;
-    while (sec * rate <= toSample + rate) {
-      if (sec >= 0) {
-        final x = xOf(sec * rate);
-        canvas.drawRect(Rect.fromLTWH(x, _rulerTickTop, 1, 8), tick);
-        _text(
-          formatClock(sec * 1000),
-          style,
-        ).paint(canvas, Offset(x + 4, _rulerLabelTop));
+    final fromMs = fromSample * 1000 / rate;
+    final toMs = toSample * 1000 / rate;
+    var ms = (fromMs / step).floor() * step;
+    while (ms <= toMs + step) {
+      if (ms >= 0) {
+        final x = xOf(ms * rate / 1000);
+        canvas.drawRect(Rect.fromLTWH(x, _rulerTickTop, 1, 8), _tick);
+        final label = formatClock(ms, millis: millis);
+        _text
+            .get('ruler:$label', label, style)
+            .paint(canvas, Offset(x + 4, _rulerLabelTop));
       }
-      sec += step;
+      ms += step;
     }
   }
 
   void _paintWaveform(
     Canvas canvas,
     Size size,
-    double cx,
+    int ph,
+    double pps,
     double fromSample,
-    double toSample,
   ) {
+    if (peaks.isEmpty) return;
     final waveH = size.height - _waveTop;
     final mid = _waveTop + waveH / 2;
-    final pps = pxPerSample;
-    final barSamples = _barStep / pps;
-    if (barSamples <= 0 || project.sampleCount <= 0) return;
+    final half = waveH / 2 * 0.97;
+    final cx = size.width / 2;
+    final framesPerBar = kWaveBarStep / pps;
 
-    final played = Path();
-    final unplayed = Path();
-    final first = math.max(0, (fromSample / barSamples).floor());
-    final last = math.min(
-      (project.sampleCount / barSamples).floor(),
-      (toSample / barSamples).ceil(),
-    );
-    for (var k = first; k <= last; k++) {
-      final s = k * barSamples;
-      final x = cx + (s - playheadSample) * pps;
-      final peak = overview.peakBetween(s, s + barSamples);
-      final h = math.max(2.0, peak * waveH * 0.97);
-      final r = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, mid - h / 2, _barWidth, h),
-        const Radius.circular(1),
-      );
-      (s < playheadSample ? played : unplayed).addRRect(r);
+    // Columns sit on a fixed frame grid so bars don't shimmer while scrolling.
+    final firstCol = (fromSample / framesPerBar).floor() - 1;
+    final cols = (size.width / kWaveBarStep).ceil() + 3;
+    if (_mins.length < cols) {
+      _mins = Float32List(cols);
+      _maxs = Float32List(cols);
+      _playedPts = Float32List(cols * 4);
+      _unplayedPts = Float32List(cols * 4);
     }
-    final glow = Paint()
-      ..color = colors.waveGlow
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    peaks.fillColumns(
+      fromFrame: firstCol * framesPerBar,
+      framesPerColumn: framesPerBar,
+      columns: cols,
+      outMin: _mins,
+      outMax: _maxs,
+      raw: pcm?.window,
+    );
+
+    var np = 0, nu = 0;
+    for (var k = 0; k < cols; k++) {
+      final mn = _mins[k];
+      if (mn.isNaN) continue;
+      final startFrame = (firstCol + k) * framesPerBar;
+      final x = cx + (startFrame - ph) * pps + _barWidth / 2;
+      var top = mid - _maxs[k] * half;
+      var bottom = mid - mn * half;
+      if (bottom - top < 2) {
+        final c = (top + bottom) / 2;
+        top = c - 1;
+        bottom = c + 1;
+      }
+      if (startFrame < ph) {
+        _playedPts
+          ..[np++] = x
+          ..[np++] = top
+          ..[np++] = x
+          ..[np++] = bottom;
+      } else {
+        _unplayedPts
+          ..[nu++] = x
+          ..[nu++] = top
+          ..[nu++] = x
+          ..[nu++] = bottom;
+      }
+    }
+    final played = Float32List.sublistView(_playedPts, 0, np);
+    final unplayed = Float32List.sublistView(_unplayedPts, 0, nu);
     canvas
-      ..drawPath(played, glow)
-      ..drawPath(unplayed, glow)
-      ..drawPath(played, Paint()..color = colors.wavePlayed)
-      ..drawPath(unplayed, Paint()..color = colors.waveUnplayed);
+      ..drawRawPoints(ui.PointMode.lines, played, _waveGlow)
+      ..drawRawPoints(ui.PointMode.lines, unplayed, _waveGlow)
+      ..drawRawPoints(ui.PointMode.lines, played, _played)
+      ..drawRawPoints(ui.PointMode.lines, unplayed, _unplayed);
   }
 
   void _paintBeats(
     Canvas canvas,
     Size size,
     double Function(num) xOf,
+    double pps,
     double fromSample,
     double toSample,
   ) {
     final beats = project.beats;
     if (beats.isEmpty) return;
-    final pad = 40 / pxPerSample;
+    final pad = 40 / pps;
     var i = _lowerBound(beats, fromSample - pad);
-    final glow = Paint()
-      ..color = colors.voltGlow
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    final solid = Paint()..color = colors.volt;
-    final downbeatSolid = Paint()
-      ..color = Color.lerp(colors.volt, Colors.white, 0.35)!;
 
     double? selectedX;
+    var prevX = double.negativeInfinity;
+    var lastLineX = double.negativeInfinity;
     for (; i < beats.length && beats[i].sample <= toSample + pad; i++) {
       final b = beats[i];
       final x = xOf(b.sample);
       if (i == selectedIndex) {
         selectedX = x; // drawn last so nothing covers it
+        prevX = x;
+        continue;
+      }
+      final nextX = i + 1 < beats.length
+          ? xOf(beats[i + 1].sample)
+          : double.infinity;
+      final detailed = math.min(x - prevX, nextX - x) >= _detailedBeatSpacingPx;
+      prevX = x;
+
+      if (!detailed) {
+        // Zoomed far out: thin lines, thinned so they never hide the
+        // waveform. Drops are always shown.
+        if (b.type != BeatType.drop && x - lastLineX < _minLineGapPx) continue;
+        lastLineX = x;
+        canvas.drawRect(
+          Rect.fromLTRB(x - 0.5, _strongLineTop, x + 0.5, size.height),
+          switch (b.type) {
+            BeatType.beat => _farBeatLine,
+            BeatType.drop => _solid,
+            _ => _beatLine,
+          },
+        );
         continue;
       }
       switch (b.type) {
@@ -267,13 +392,9 @@ class TimelinePainter extends CustomPainter {
           canvas
             ..drawRect(
               Rect.fromLTRB(x - 0.75, _beatLineTop, x + 0.75, size.height),
-              Paint()..color = colors.volt.withValues(alpha: 0.5),
+              _beatLine,
             )
-            ..drawCircle(
-              Offset(x, _dotTop + 3),
-              3,
-              Paint()..color = colors.volt.withValues(alpha: 0.75),
-            );
+            ..drawCircle(Offset(x, _dotTop + 3), 3, _beatDot);
         case BeatType.strong:
         case BeatType.downbeat:
           final isDownbeat = b.type == BeatType.downbeat;
@@ -283,8 +404,10 @@ class TimelinePainter extends CustomPainter {
             x + 1.25,
             size.height,
           );
-          final tp = _text(
-            isDownbeat ? '1' : '${i + 1}',
+          final label = isDownbeat ? '1' : '${i + 1}';
+          final tp = _text.get(
+            'pill:$label',
+            label,
             KvText.mono(
               size: 11,
               weight: FontWeight.w700,
@@ -299,11 +422,12 @@ class TimelinePainter extends CustomPainter {
             _pillTop + 20,
             const Radius.circular(10),
           );
+          final fill = isDownbeat ? _downbeatSolid : _solid;
           canvas
-            ..drawRect(line, glow)
-            ..drawRRect(pill, glow)
-            ..drawRect(line, isDownbeat ? downbeatSolid : solid)
-            ..drawRRect(pill, isDownbeat ? downbeatSolid : solid);
+            ..drawRect(line, _glow)
+            ..drawRRect(pill, _glow)
+            ..drawRect(line, fill)
+            ..drawRRect(pill, fill);
           tp.paint(
             canvas,
             Offset(x - tp.width / 2, _pillTop + (20 - tp.height) / 2),
@@ -323,11 +447,12 @@ class TimelinePainter extends CustomPainter {
             const Radius.circular(11),
           );
           canvas
-            ..drawRect(line, glow)
-            ..drawRRect(flag, glow)
-            ..drawRect(line, solid)
-            ..drawRRect(flag, solid);
-          final tp = _text(
+            ..drawRect(line, _glow)
+            ..drawRRect(flag, _glow)
+            ..drawRect(line, _solid)
+            ..drawRRect(flag, _solid);
+          final tp = _text.get(
+            'drop',
             'DROP',
             KvText.ui(
               size: 10,
@@ -387,14 +512,15 @@ class TimelinePainter extends CustomPainter {
         Paint()..color = colors.text1.withValues(alpha: 0.25),
       )
       ..drawCircle(center, _ringRadius, Paint()..color = colors.text1);
-    final tp = _text(
+    final tp = _text.get(
+      'sel:$number',
       '$number',
       KvText.mono(size: 12, weight: FontWeight.w700, color: colors.onVolt),
     );
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 
-  void _paintPlayhead(Canvas canvas, Size size, double cx) {
+  void _paintPlayhead(Canvas canvas, Size size, double cx, int ph) {
     final line = Rect.fromLTRB(cx - 1, _playheadTop, cx + 1, size.height);
     canvas
       ..drawRect(
@@ -413,10 +539,18 @@ class TimelinePainter extends CustomPainter {
       const Radius.circular(11),
     );
     canvas.drawRRect(bubble, Paint()..color = colors.text1);
-    final tp = _text(
-      formatClock(project.sampleToMs(playheadSample), millis: true),
-      KvText.mono(size: 11, weight: FontWeight.w700, color: colors.onVolt),
-    );
+    // Changes every frame; not worth caching.
+    final tp = TextPainter(
+      text: TextSpan(
+        text: formatClock(project.sampleToMs(ph), millis: true),
+        style: KvText.mono(
+          size: 11,
+          weight: FontWeight.w700,
+          color: colors.onVolt,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
     tp.paint(
       canvas,
       Offset(cx - tp.width / 2, _bubbleTop + (22 - tp.height) / 2),
@@ -449,35 +583,28 @@ class TimelinePainter extends CustomPainter {
     }
   }
 
-  static TextPainter _text(String s, TextStyle style) => TextPainter(
-    text: TextSpan(text: s, style: style),
-    textDirection: ui.TextDirection.ltr,
-  )..layout();
-
   @override
   bool shouldRepaint(TimelinePainter old) =>
       old.project != project ||
-      old.overview != overview ||
-      old.playheadSample != playheadSample ||
+      !identical(old.peaks, peaks) ||
+      old.playhead != playhead ||
       old.zoom != zoom ||
+      old.pcm != pcm ||
       old.selectedIndex != selectedIndex ||
       old.colors != colors;
 }
 
-/// Whole-song strip: section tints, mini waveform and the viewport box.
+/// Whole-song strip, static part: section tints and the mini waveform.
+/// Repaints only when the project or size changes.
 class OverviewPainter extends CustomPainter {
   OverviewPainter({
     required this.project,
-    required this.overview,
-    required this.playheadSample,
-    required this.visibleSamples,
+    required this.peaks,
     required this.colors,
   });
 
   final Project project;
-  final Overview overview;
-  final int playheadSample;
-  final double visibleSamples;
+  final PeakPyramid peaks;
   final KvColors colors;
 
   @override
@@ -500,28 +627,90 @@ class OverviewPainter extends CustomPainter {
       );
     }
 
-    final bars = Path();
-    final maxH = size.height - 1;
-    for (var x = 0.0; x < size.width; x += 2) {
-      final s0 = x / size.width * totalSamples;
-      final s1 = (x + 2) / size.width * totalSamples;
-      final h = math.max(
-        2.0,
-        math.min(1.0, overview.meanBetween(s0, s1) * 1.45) * maxH,
+    if (!peaks.isEmpty) {
+      const step = 2.0;
+      final cols = (size.width / step).floor();
+      final mins = Float32List(cols), maxs = Float32List(cols);
+      peaks.fillColumns(
+        fromFrame: 0,
+        framesPerColumn: totalSamples / cols,
+        columns: cols,
+        outMin: mins,
+        outMax: maxs,
       );
-      bars.addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(x, (size.height - h) / 2, 1, h),
-          const Radius.circular(1),
-        ),
+      final pts = Float32List(cols * 4);
+      final mid = size.height / 2;
+      final half = (size.height - 1) / 2;
+      var n = 0;
+      for (var k = 0; k < cols; k++) {
+        if (maxs[k].isNaN) continue;
+        final amp = math.max(1.0, math.max(maxs[k], -mins[k]) * half);
+        final x = k * step + 0.5;
+        pts
+          ..[n++] = x
+          ..[n++] = mid - amp
+          ..[n++] = x
+          ..[n++] = mid + amp;
+      }
+      canvas.drawRawPoints(
+        ui.PointMode.lines,
+        Float32List.sublistView(pts, 0, n),
+        Paint()
+          ..color = colors.waveOverview
+          ..strokeWidth = 1,
       );
     }
-    canvas
-      ..drawPath(bars, Paint()..color = colors.waveOverview)
-      ..restore();
+    canvas.restore();
+  }
 
-    final w = math.min(size.width, math.max(20.0, xOf(visibleSamples)));
-    final left = (xOf(playheadSample) - w / 2).clamp(0.0, size.width - w);
+  @override
+  bool shouldRepaint(OverviewPainter old) =>
+      old.project != project ||
+      !identical(old.peaks, peaks) ||
+      old.colors != colors;
+}
+
+/// Whole-song strip, moving part: the box showing what's on screen.
+class OverviewViewportPainter extends CustomPainter {
+  OverviewViewportPainter({
+    required this.sampleCount,
+    required this.sampleRate,
+    required this.playhead,
+    required this.zoom,
+    required this.timelineWidth,
+    required this.colors,
+  }) : super(repaint: Listenable.merge([playhead, zoom]));
+
+  final int sampleCount;
+  final int sampleRate;
+  final ValueListenable<int> playhead;
+  final ValueListenable<double> zoom;
+  final double timelineWidth;
+  final KvColors colors;
+
+  late final _glowPaint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.35)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  late final _linePaint = Paint()
+    ..color = colors.text1
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = math.max(1, sampleCount).toDouble();
+    final pps = zoom.value * kPxPerSecondAt1x / math.max(1, sampleRate);
+    final visibleSamples = timelineWidth / pps;
+    final w = math.min(
+      size.width,
+      math.max(20.0, visibleSamples / total * size.width),
+    );
+    final left = (playhead.value / total * size.width - w / 2).clamp(
+      0.0,
+      size.width - w,
+    );
     final box = RRect.fromLTRBR(
       left,
       -1,
@@ -530,28 +719,16 @@ class OverviewPainter extends CustomPainter {
       const Radius.circular(4),
     );
     canvas
-      ..drawRRect(
-        box,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.35)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-      )
-      ..drawRRect(
-        box.deflate(0.75),
-        Paint()
-          ..color = colors.text1
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
+      ..drawRRect(box, _glowPaint)
+      ..drawRRect(box.deflate(0.75), _linePaint);
   }
 
   @override
-  bool shouldRepaint(OverviewPainter old) =>
-      old.project != project ||
-      old.overview != overview ||
-      old.playheadSample != playheadSample ||
-      old.visibleSamples != visibleSamples ||
+  bool shouldRepaint(OverviewViewportPainter old) =>
+      old.sampleCount != sampleCount ||
+      old.sampleRate != sampleRate ||
+      old.playhead != playhead ||
+      old.zoom != zoom ||
+      old.timelineWidth != timelineWidth ||
       old.colors != colors;
 }

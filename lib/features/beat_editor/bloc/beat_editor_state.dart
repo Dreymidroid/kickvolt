@@ -2,6 +2,10 @@ part of 'beat_editor_cubit.dart';
 
 enum EditorTool { auto, tap, edit, sections, bulk }
 
+/// Editor state. The playhead and zoom change every frame while playing or
+/// pinching, so they live on the cubit as `ValueListenable`s
+/// ([BeatEditorCubit.playhead], [BeatEditorCubit.zoom]) that painters
+/// listen to directly, not here.
 @freezed
 sealed class BeatEditorState with _$BeatEditorState {
   const BeatEditorState._();
@@ -10,16 +14,16 @@ sealed class BeatEditorState with _$BeatEditorState {
 
   const factory BeatEditorState.ready({
     required Project project,
-    required Uint8List overview,
-    required int binFrames,
-    @Default(0) int playheadSample,
 
-    /// 1× fits ~30 s on screen; the design's default is 4×.
-    @Default(4.0) double zoom,
+    /// Multi-level waveform peaks of `song.wav`.
+    required PeakPyramid peaks,
     @Default(true) bool snap,
     @Default(false) bool clicks,
     @Default(1.0) double speed,
     @Default(false) bool playing,
+
+    /// The player couldn't open the song; the editor still works silently.
+    @Default(false) bool playbackUnavailable,
     @Default(EditorTool.edit) EditorTool tool,
 
     /// Index into `project.beats` of the marker being edited, if any.

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:kickvolt/core/audio_math/overview.dart';
+import 'package:kickvolt/core/audio_math/pcm_window_loader.dart';
+import 'package:kickvolt/core/audio_math/peaks.dart';
 import 'package:kickvolt/features/import/import.dart';
 import 'package:kickvolt/features/projects/projects.dart';
 
@@ -151,6 +153,22 @@ Overview createDemoOverview({int sampleRate = 44100}) {
   return Overview(binFrames: binFrames, bins: bins);
 }
 
+/// Peaks for the demo song, derived from [createDemoOverview] (symmetric
+/// min/max per 64-frame bucket).
+PeakPyramid createDemoPeaks({int sampleRate = 44100}) {
+  final ov = createDemoOverview(sampleRate: sampleRate);
+  final frames = createDemoProject(sampleRate: sampleRate).sampleCount;
+  final buckets = (frames + 63) ~/ 64;
+  final finest = Int16List(2 * buckets);
+  for (var b = 0; b < buckets; b++) {
+    final bin = math.min(ov.binCount - 1, b * 64 ~/ ov.binFrames);
+    final amp = ov.bins[bin] * 32767 ~/ 255;
+    finest[2 * b] = -amp;
+    finest[2 * b + 1] = amp;
+  }
+  return PeakPyramid.fromFinest(frameCount: frames, finest: finest);
+}
+
 /// In-memory [ProjectRepository] for beat editor tests.
 class FakeDemoProjectRepository implements ProjectRepository {
   FakeDemoProjectRepository([Project? initial]) {
@@ -176,6 +194,18 @@ class FakeDemoProjectRepository implements ProjectRepository {
     final p = _projects[id];
     return createDemoOverview(sampleRate: p?.sampleRate ?? 44100);
   }
+
+  @override
+  Future<PeakPyramid> getPeaks(String id) async =>
+      createDemoPeaks(sampleRate: _projects[id]?.sampleRate ?? 44100);
+
+  @override
+  Future<String> songPath(String id) async => '/fake/projects/$id/song.wav';
+
+  /// No real file in tests; the editor falls back to the finest level.
+  @override
+  Future<PcmWindowLoader> openPcmWindow(String id) =>
+      throw UnsupportedError('no song.wav in tests');
 
   /// When set, each save waits on this before completing (to hold a save
   /// "in flight").

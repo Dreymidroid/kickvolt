@@ -6,6 +6,7 @@ import 'package:kickvolt/features/beat_editor/beat_editor.dart';
 import 'package:kickvolt/features/projects/projects.dart';
 
 import '../../../fixtures/demo_project.dart';
+import '../../playback/fake_audio_playback.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,23 +31,21 @@ void main() {
   });
 
   group('BeatEditorCubit', () {
-    blocTest<BeatEditorCubit, BeatEditorState>(
-      'loads the project at the requested playhead sample',
-      build: () => BeatEditorCubit(repository: repo),
-      act: (c) => c.load('demo', initialPlayheadSample: playhead15s),
-      expect: () => [
-        const BeatEditorState.loading(),
-        isA<BeatEditorReady>().having(
-          (s) => s.playheadSample,
-          'playheadSample',
-          playhead15s,
-        ),
-      ],
-    );
+    test('loads the project at the requested playhead sample', () async {
+      final player = FakeAudioPlayback();
+      final c = BeatEditorCubit(playback: player, repository: repo);
+      await c.load('demo', initialPlayheadSample: playhead15s);
+      expect(c.state, isA<BeatEditorReady>());
+      expect(c.playheadSample, playhead15s);
+      expect(player.openedPath, '/fake/projects/demo/song.wav');
+      expect(player.calls, ['seek ${playhead15s * 1000000 ~/ sampleRate}']);
+      await c.close();
+    });
 
     blocTest<BeatEditorCubit, BeatEditorState>(
       'add at playhead snaps to the grid, then undo and redo restore it',
-      build: () => BeatEditorCubit(repository: repo),
+      build: () =>
+          BeatEditorCubit(playback: FakeAudioPlayback(), repository: repo),
       act: (c) async {
         await c.load('demo', initialPlayheadSample: playhead15s);
         c
@@ -56,7 +55,7 @@ void main() {
           ..undo()
           ..redo();
       },
-      skip: 4, // loading, ready, snap off, seek
+      skip: 3, // loading, ready, snap off (seeking doesn't emit)
       expect: () => [
         isA<BeatEditorReady>()
             .having((s) => s.project.beatCount, 'beats', 359)
@@ -70,7 +69,8 @@ void main() {
 
     blocTest<BeatEditorCubit, BeatEditorState>(
       'does not add a duplicate within 20 ms of an existing beat',
-      build: () => BeatEditorCubit(repository: repo),
+      build: () =>
+          BeatEditorCubit(playback: FakeAudioPlayback(), repository: repo),
       act: (c) async {
         await c.load(
           'demo',
@@ -82,21 +82,120 @@ void main() {
       expect: () => [],
     );
 
-    blocTest<BeatEditorCubit, BeatEditorState>(
-      'clamps zoom and seek',
-      build: () => BeatEditorCubit(repository: repo),
-      act: (c) async {
+    test('zoom spans the whole song down to ~20 ms per screen', () async {
+      final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
+        repository: repo,
+      );
+      await c.load('demo');
+      c.setViewportWidth(390);
+
+      c.setZoom(1e9);
+      // 390 px / (0.02 s * 12.8 px/s)
+      expect(c.zoom.value, closeTo(1523.4, 0.1));
+      final visibleMs = 390 / c.pxPerSample / sampleRate * 1000;
+      expect(visibleMs, closeTo(20, 0.01));
+
+      c.setZoom(0);
+      // Demo song is 168.75 s: the whole song just fits.
+      expect(c.zoom.value, closeTo(390 / (168.75 * 12.8), 1e-6));
+      final s = c.state as BeatEditorReady;
+      expect(390 / c.pxPerSample, closeTo(s.project.sampleCount, 1));
+      await c.close();
+    });
+
+    test('seek clamps to the song and never reaches sampleCount', () async {
+      final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
+        repository: repo,
+      );
+      await c.load('demo');
+      final s = c.state as BeatEditorReady;
+      c.seekTo(-5);
+      expect(c.playheadSample, 0);
+      c.seekTo(1 << 40);
+      expect(c.playheadSample, s.project.sampleCount - 1);
+      await c.close();
+    });
+
+    group('playback', () {
+      late FakeAudioPlayback player;
+      late BeatEditorCubit c;
+
+      setUp(() async {
+        player = FakeAudioPlayback();
+        c = BeatEditorCubit(playback: player, repository: repo);
         await c.load('demo');
-        c
-          ..setZoom(100)
-          ..seekTo(-5);
-      },
-      skip: 2,
-      expect: () => [
-        isA<BeatEditorReady>().having((s) => s.zoom, 'zoom', 16),
-        // seekTo(-5) clamps to 0, which equals the current state: no emit.
-      ],
-    );
+        player.calls.clear();
+      });
+      tearDown(() => c.close());
+
+      test('play shows Pause at once and follows the player', () async {
+        c.togglePlay();
+        expect((c.state as BeatEditorReady).playing, isTrue);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.calls, ['play']);
+
+        player.push(playing: true);
+        player.push(position: const Duration(seconds: 2));
+        expect((c.state as BeatEditorReady).playing, isFalse);
+        expect(c.playheadSample, 2 * sampleRate);
+      });
+
+      test('toggling while playing pauses', () async {
+        player.push(playing: true);
+        c.togglePlay();
+        await Future<void>.delayed(Duration.zero);
+        expect(player.calls, ['pause']);
+      });
+
+      test('speed is forwarded to the player', () async {
+        c.setSpeed(0.75);
+        expect((c.state as BeatEditorReady).speed, 0.75);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.calls, ['speed 0.75']);
+      });
+
+      test('scrubbing moves the playhead and seeks only on release', () async {
+        player.push(playing: true);
+        c.scrubStart();
+        c.scrubTo(sampleRate);
+        c.scrubTo(3 * sampleRate);
+        expect(c.playheadSample, 3 * sampleRate);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.calls, ['pause']);
+
+        await c.scrubEnd();
+        expect(player.calls, ['pause', 'seek 3000000', 'play']);
+      });
+
+      test('selecting a beat seeks to it', () async {
+        c.selectBeat(32);
+        await Future<void>.delayed(Duration.zero);
+        expect(player.calls, ['seek 15000000']);
+        expect(c.playheadSample, playhead15s);
+      });
+
+      test('close releases the player', () async {
+        await c.close();
+        expect(player.disposed, isTrue);
+      });
+    });
+
+    test('if the song cannot be played the editor still works', () async {
+      final player = FakeAudioPlayback()..openError = Exception('no codec');
+      final c = BeatEditorCubit(playback: player, repository: repo);
+      await c.load('demo');
+      final s = c.state as BeatEditorReady;
+      expect(s.playbackUnavailable, isTrue);
+
+      c.togglePlay();
+      expect((c.state as BeatEditorReady).playing, isFalse);
+      c.seekTo(sampleRate);
+      expect(c.playheadSample, sampleRate);
+      expect(player.calls, isEmpty);
+      await c.close();
+    });
 
     test('snap uses bpm and beatPhaseSample when adding at playhead', () async {
       // 120 BPM at 48,000 Hz => grid = 24,000 frames; phase offset = 1,000 frames.
@@ -108,7 +207,10 @@ void main() {
         includeBeats: false,
       );
       repo.put(phased);
-      final c = BeatEditorCubit(repository: repo);
+      final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
+        repository: repo,
+      );
       await c.load('phased', initialPlayheadSample: 26500);
       c.addBeatAtPlayhead();
 
@@ -126,7 +228,10 @@ void main() {
         includeBeats: false,
       );
       repo.put(unknownTempo);
-      final c = BeatEditorCubit(repository: repo);
+      final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
+        repository: repo,
+      );
       await c.load('nobpm', initialPlayheadSample: 12345);
       c.addBeatAtPlayhead();
 
@@ -137,6 +242,7 @@ void main() {
 
     test('debounces saveProject across rapid edits and flushes pending save on close()', () async {
       final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
         repository: repo,
         saveDebounce: const Duration(milliseconds: 40),
       );
@@ -176,6 +282,7 @@ void main() {
         }
       };
       final c = BeatEditorCubit(
+        playback: FakeAudioPlayback(),
         repository: repo,
         saveDebounce: const Duration(milliseconds: 20),
       );
@@ -206,6 +313,7 @@ void main() {
       () async {
         repo.saveError = const ProjectCorruptException('disk full');
         final c = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
           repository: repo,
           saveDebounce: const Duration(milliseconds: 20),
         );

@@ -42,17 +42,24 @@ class EditorChipsRow extends StatelessWidget {
           const Spacer(),
           KvIcon(KvIcons.zoom, size: 14, color: kv.text3),
           const SizedBox(width: 4),
-          Text(
-            '${_zoomLabel(state.zoom)}×',
-            style: KvText.mono(size: 12, color: kv.text2),
+          ValueListenableBuilder<double>(
+            valueListenable: cubit.zoom,
+            builder: (context, z, _) => Text(
+              '${zoomLabel(z)}×',
+              style: KvText.mono(size: 12, color: kv.text2),
+            ),
           ),
         ],
       ),
     );
   }
 
-  static String _zoomLabel(double z) =>
-      z >= 10 || z == z.roundToDouble() ? '${z.round()}' : z.toStringAsFixed(1);
+  /// `0.3`, `4`, `12`, `1.6k` …
+  static String zoomLabel(double z) {
+    if (z >= 1000) return '${(z / 1000).toStringAsFixed(1)}k';
+    if (z >= 10 || z == z.roundToDouble()) return '${z.round()}';
+    return z.toStringAsFixed(1);
+  }
 }
 
 /// Speed segmented control, back/forward 2 s and the Play button.

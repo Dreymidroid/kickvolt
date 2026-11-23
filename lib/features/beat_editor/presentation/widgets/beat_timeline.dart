@@ -4,13 +4,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../../core/audio_math/overview.dart';
 import '../../../../shared/shared.dart';
 import '../../../projects/projects.dart';
 import '../../bloc/beat_editor_cubit.dart';
 import 'timeline_painter.dart';
 
 /// Zoomable waveform: pinch to zoom, drag to scrub under the fixed playhead.
+/// Playhead and zoom come from the cubit's notifiers, so only the painter
+/// (and the selected-marker card) update per frame.
 class BeatTimeline extends HookWidget {
   const BeatTimeline({super.key, required this.state});
 
@@ -19,56 +20,73 @@ class BeatTimeline extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<BeatEditorCubit>();
-    final zoomAtStart = useRef(state.zoom);
+    final zoomAtStart = useRef(cubit.zoom.value);
     final scrubSample = useRef(0.0);
-    final overview = Overview(binFrames: state.binFrames, bins: state.overview);
+    final pinching = useRef(false);
 
     return Semantics(
       label: 'Waveform. Tap a marker to edit it. Pinch to zoom, drag to scrub.',
       child: LayoutBuilder(
         builder: (context, c) {
           final width = c.maxWidth;
-          final pxPerSample =
-              state.zoom *
-              kPxPerSecondAt1x /
-              math.max(1, state.project.sampleRate);
+          // Zoom limits depend on the view width; report it after layout.
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => cubit.setViewportWidth(width),
+          );
           final selected = state.selectedIndex;
           return Stack(
             children: [
               Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapUp: (d) => cubit.selectBeat(
-                    TimelinePainter.beatAt(
-                      project: state.project,
-                      playheadSample: state.playheadSample,
-                      zoom: state.zoom,
-                      dx: d.localPosition.dx,
-                      dy: d.localPosition.dy,
-                      width: width,
+                child: RepaintBoundary(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) => cubit.selectBeat(
+                      TimelinePainter.beatAt(
+                        project: state.project,
+                        playheadSample: cubit.playheadSample,
+                        zoom: cubit.zoom.value,
+                        dx: d.localPosition.dx,
+                        dy: d.localPosition.dy,
+                        width: width,
+                      ),
                     ),
-                  ),
-                  onScaleStart: (_) {
-                    zoomAtStart.value = state.zoom;
-                    scrubSample.value = state.playheadSample.toDouble();
-                  },
-                  onScaleUpdate: (d) {
-                    if (d.pointerCount > 1) {
-                      cubit.setZoom(zoomAtStart.value * d.scale);
-                      return;
-                    }
-                    scrubSample.value -= d.focalPointDelta.dx / pxPerSample;
-                    cubit.seekTo(scrubSample.value.round());
-                  },
-                  child: CustomPaint(
-                    size: Size.infinite,
-                    painter: TimelinePainter(
-                      project: state.project,
-                      overview: overview,
-                      playheadSample: state.playheadSample,
-                      zoom: state.zoom,
-                      colors: context.kv,
-                      selectedIndex: selected,
+                    onScaleStart: (d) {
+                      zoomAtStart.value = cubit.zoom.value;
+                      scrubSample.value = cubit.playheadSample.toDouble();
+                      pinching.value = d.pointerCount > 1;
+                      if (!pinching.value) cubit.scrubStart();
+                    },
+                    onScaleUpdate: (d) {
+                      if (d.pointerCount > 1) {
+                        if (!pinching.value) {
+                          // A second finger joined a drag: finish the scrub.
+                          pinching.value = true;
+                          cubit.scrubEnd();
+                          zoomAtStart.value = cubit.zoom.value / d.scale;
+                        }
+                        cubit.setZoom(zoomAtStart.value * d.scale);
+                        return;
+                      }
+                      if (pinching.value) return;
+                      scrubSample.value -=
+                          d.focalPointDelta.dx / cubit.pxPerSample;
+                      cubit.scrubTo(scrubSample.value.round());
+                    },
+                    onScaleEnd: (_) {
+                      if (!pinching.value) cubit.scrubEnd();
+                      pinching.value = false;
+                    },
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: TimelinePainter(
+                        project: state.project,
+                        peaks: state.peaks,
+                        playhead: cubit.playhead,
+                        zoom: cubit.zoom,
+                        pcm: cubit.pcmWindow,
+                        colors: context.kv,
+                        selectedIndex: selected,
+                      ),
                     ),
                   ),
                 ),
@@ -76,7 +94,11 @@ class BeatTimeline extends HookWidget {
               if (selected != null &&
                   selected >= 0 &&
                   selected < state.project.beats.length)
-                _cardFor(context, selected, width, pxPerSample),
+                ListenableBuilder(
+                  listenable: Listenable.merge([cubit.playhead, cubit.zoom]),
+                  builder: (context, _) =>
+                      _cardFor(context, cubit, selected, width),
+                ),
             ],
           );
         },
@@ -86,27 +108,32 @@ class BeatTimeline extends HookWidget {
 
   Widget _cardFor(
     BuildContext context,
+    BeatEditorCubit cubit,
     int index,
     double width,
-    double pxPerSample,
   ) {
     final beat = state.project.beats[index];
-    final x = width / 2 + (beat.sample - state.playheadSample) * pxPerSample;
+    final x =
+        width / 2 + (beat.sample - cubit.playheadSample) * cubit.pxPerSample;
     // Hide the card once its marker has been scrubbed off screen.
     if (x < -20 || x > width + 20) return const SizedBox.shrink();
-    return Positioned(
-      left: (x - 104).clamp(8.0, width - 216),
-      bottom: 12,
-      width: 208,
-      height: 46,
-      child: IgnorePointer(
-        child: BeatInfoCard(
-          number: index + 1,
-          beat: beat,
-          timeMs: state.project.sampleToMs(beat.sample),
-          snapped: state.project.isOnGrid(beat.sample),
+    return Stack(
+      children: [
+        Positioned(
+          left: (x - 104).clamp(8.0, math.max(8.0, width - 216)),
+          bottom: 12,
+          width: 208,
+          height: 46,
+          child: IgnorePointer(
+            child: BeatInfoCard(
+              number: index + 1,
+              beat: beat,
+              timeMs: state.project.sampleToMs(beat.sample),
+              snapped: state.project.isOnGrid(beat.sample),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -204,10 +231,6 @@ class OverviewStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<BeatEditorCubit>();
-    final pxPerSample =
-        state.zoom * kPxPerSecondAt1x / math.max(1, state.project.sampleRate);
-    final visibleSamples = screenWidth / pxPerSample;
-    final overview = Overview(binFrames: state.binFrames, bins: state.overview);
 
     void seek(double x, double width) =>
         cubit.seekTo((x / width * state.project.sampleCount).round());
@@ -219,14 +242,22 @@ class OverviewStrip extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTapDown: (d) => seek(d.localPosition.dx, c.maxWidth),
           onHorizontalDragUpdate: (d) => seek(d.localPosition.dx, c.maxWidth),
-          child: CustomPaint(
-            size: Size(c.maxWidth, 32),
-            painter: OverviewPainter(
-              project: state.project,
-              overview: overview,
-              playheadSample: state.playheadSample,
-              visibleSamples: visibleSamples,
-              colors: context.kv,
+          child: RepaintBoundary(
+            child: CustomPaint(
+              size: Size(c.maxWidth, 32),
+              painter: OverviewPainter(
+                project: state.project,
+                peaks: state.peaks,
+                colors: context.kv,
+              ),
+              foregroundPainter: OverviewViewportPainter(
+                sampleCount: state.project.sampleCount,
+                sampleRate: state.project.sampleRate,
+                playhead: cubit.playhead,
+                zoom: cubit.zoom,
+                timelineWidth: screenWidth,
+                colors: context.kv,
+              ),
             ),
           ),
         ),

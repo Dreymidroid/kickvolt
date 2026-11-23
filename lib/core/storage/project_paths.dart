@@ -29,6 +29,9 @@ class ProjectPaths {
   String overviewBin(String id) => p.join(projectDir(id), 'overview.bin');
 
   /// Persisted project document.
+  /// Multi-level min/max waveform peaks for the editor.
+  String peaksBin(String id) => p.join(projectDir(id), 'peaks.bin');
+
   String projectJson(String id) => p.join(projectDir(id), 'project.json');
 
   Future<Directory> createProjectDir(String id) =>

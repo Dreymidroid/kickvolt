@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/audio_math/overview.dart';
+import '../../../../core/audio_math/pcm_window_loader.dart';
+import '../../../../core/audio_math/peaks.dart';
 import '../../../../core/audio_math/wav_header.dart';
 import '../../../../core/storage/project_paths.dart';
 import '../../../import/domain/entities/imported_song.dart';
@@ -24,6 +26,16 @@ abstract interface class ProjectRepository {
   Future<Project> getProject(String id);
 
   Future<Overview> getOverview(String id);
+
+  /// Editor waveform peaks; computed and cached on first use if missing.
+  Future<PeakPyramid> getPeaks(String id);
+
+  /// Absolute path of the project's decoded `song.wav` (for playback).
+  Future<String> songPath(String id);
+
+  /// Reader for raw sample windows of `song.wav` (deep zoom). The caller
+  /// disposes it.
+  Future<PcmWindowLoader> openPcmWindow(String id);
 
   Future<void> saveProject(Project project);
 
@@ -63,8 +75,12 @@ class ProjectRepositoryImpl implements ProjectRepository {
         );
       }
 
-      final ov = await computeOverview(wavPath);
+      final (ov, peaks) = await (
+        computeOverview(wavPath),
+        computePeaks(wavPath),
+      ).wait;
       await _writeAtomicBytes(paths.overviewBin(id), encodeOverview(ov));
+      await _writeAtomicBytes(paths.peaksBin(id), encodePeaks(peaks));
 
       final now = _clock().toUtc();
       final copiedName = song.sourceCopyPath != null
@@ -170,6 +186,35 @@ class ProjectRepositoryImpl implements ProjectRepository {
     }
     return Overview.empty;
   }
+
+  @override
+  Future<PeakPyramid> getPeaks(String id) async {
+    final paths = await _paths();
+    final file = File(paths.peaksBin(id));
+    if (await file.exists()) {
+      try {
+        return decodePeaks(await file.readAsBytes());
+      } on FormatException catch (e) {
+        developer.log('Rebuilding bad peaks.bin for $id: $e', name: 'projects');
+      }
+    }
+    final wav = paths.songWav(id);
+    if (!await File(wav).exists()) throw ProjectNotFoundException(id);
+    final peaks = await computePeaks(wav);
+    try {
+      await _writeAtomicBytes(file.path, encodePeaks(peaks));
+    } catch (e) {
+      developer.log('Could not cache peaks for $id: $e', name: 'projects');
+    }
+    return peaks;
+  }
+
+  @override
+  Future<String> songPath(String id) async => (await _paths()).songWav(id);
+
+  @override
+  Future<PcmWindowLoader> openPcmWindow(String id) async =>
+      PcmWindowLoader.open((await _paths()).songWav(id));
 
   @override
   Future<void> saveProject(Project project) async {
