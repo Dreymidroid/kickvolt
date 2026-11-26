@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:fftea/fftea.dart';
 
 import '../../../core/audio_math/wav_header.dart';
+import '../../projects/domain/entities/detection_settings.dart';
 import 'entities/beat_analysis.dart';
 
 /// STFT window size in mono sample frames (§4.2).
@@ -315,6 +316,8 @@ Future<BeatAnalysis> analyzeWavFile(
         candidates: const <CandidateBeat>[],
         frameLowEnergy: frameLowEnergy,
         frameOverallEnergy: frameOverallEnergy,
+        onsetEnvelope: onsetEnv,
+        lowMidOnsetEnvelope: lowMidEnv,
       );
     }
 
@@ -348,6 +351,7 @@ Future<BeatAnalysis> analyzeWavFile(
       periodFrames: tempoEst.periodFrames,
       checkCancel: checkCancel,
     );
+    await closeRaf();
 
     // Compute final BPM from the refined beats (§4.4) to 0.1 BPM.
     final finalBpm = _computeFinalBpmFromBeats(
@@ -373,6 +377,28 @@ Future<BeatAnalysis> analyzeWavFile(
       periodFrames: tempoEst.periodFrames,
     );
 
+    // M4b §4.3: Local tempo curve & stability (1 s step, 6 s window, Viterbi
+    // smoothed, constrained to the global octave around the refined beat period
+    // `finalBpm` rather than the raw autocorrelation lag, which can sit on a 2x
+    // sub-harmonic when a song steps between two distant tempos).
+    final refinedPeriodFrames = finalBpm > 0
+        ? (sampleRate / stftHopSize) * 60.0 / finalBpm
+        : tempoEst.periodFrames;
+    final localTempoResult = _computeLocalTempoCurve(
+      onsetEnv,
+      lowMidOnset: lowMidEnv,
+      sampleRate: sampleRate,
+      hopSize: stftHopSize,
+      anchorPeriodFrames: refinedPeriodFrames,
+    );
+
+    // M4b §4.4: Estimate swing ratio and confidence from onset peaks between
+    // consecutive tracked beats.
+    final swingEst = _estimateSwingFromBeats(
+      onsetEnv: onsetEnv,
+      trackedFrames: trackedFrames,
+    );
+
     onProgress?.call(
       AnalysisProgress(
         stage: AnalysisStage.sections,
@@ -392,6 +418,12 @@ Future<BeatAnalysis> analyzeWavFile(
       candidates: candidates,
       frameLowEnergy: frameLowEnergy,
       frameOverallEnergy: frameOverallEnergy,
+      onsetEnvelope: onsetEnv,
+      lowMidOnsetEnvelope: lowMidEnv,
+      tempoCandidates: tempoEst.candidates,
+      localTempo: localTempoResult.blockPeriods,
+      tempoStability: localTempoResult.stability,
+      swing: swingEst,
     );
 
     onProgress?.call(
@@ -517,11 +549,13 @@ class _TempoEstimate {
     required this.bpm,
     required this.periodFrames,
     required this.confidence,
+    this.candidates = const <TempoCandidate>[],
   });
 
   final double bpm;
   final double periodFrames;
   final double confidence;
+  final List<TempoCandidate> candidates;
 }
 
 /// Estimates tempo from autocorrelation of [onsetEnv] over 40–220 BPM (§4.3).
@@ -655,23 +689,69 @@ _TempoEstimate _estimateTempo(
   }
 
   // §4.3 Half/double ambiguity: score T, 2T, T/2, 3T/2 and 2T/3 (where in range).
+  // M4b §4.4 Swing rule (HEURISTIC):
+  // When a track has swung eighth notes at ~2/3 of the beat period T_beat,
+  // the autocorrelation has a sub-peak near 2/3 * T_beat (which corresponds to
+  // 3/2 * BPM_beat). If bestLag landed on the triplet/swung lag (so 1.5 * bestLag
+  // is the true beat period T_beat), or if we are evaluating the 2/3 * T_beat
+  // multiplier of a beat lag, we check whether the beat lag T_beat has strong
+  // kick/snare periodicity (`lowAcf[T_beat]`) AND explains the swung off-beat
+  // (`rawAcf[round(2/3 * T_beat)]`). When it does, we penalise the ×3/2 tempo
+  // (2/3 lag) and ×2/3 tempo (3/2 lag) candidates so a 90 BPM shuffle never
+  // reads 135 or 60.
+  int snapLag(int lagInt, int hiLag) {
+    var pk = lagInt;
+    for (var d = -1; d <= 1; d++) {
+      final k = lagInt + d;
+      if (k >= minLag && k <= hiLag && rawAcf[k] > rawAcf[pk]) {
+        pk = k;
+      }
+    }
+    return pk;
+  }
+
+  // HEURISTIC: Check if a candidate beat lag `beatPk` exhibits swing/shuffle
+  // structure (strong kick/snare beat correlation + secondary onset correlation
+  // near 2/3 of `beatPk` that is stronger than straight 1/2 subdivision).
+  bool isSwingSupportedBeatLag(int beatPk) {
+    if (beatPk < minLag || beatPk > maxLag) return false;
+    final twoThirds = (beatPk * (2.0 / 3.0)).round();
+    final half = (beatPk * 0.5).round();
+    if (twoThirds < 2 || twoThirds > maxLag || half < 2) return false;
+    final swPk = snapLag(twoThirds, maxLag);
+    final halfAcf = rawAcf[half];
+    return lowAcf[beatPk] > 0.22 &&
+        rawAcf[beatPk] > 0.25 &&
+        rawAcf[swPk] > 0.15 &&
+        rawAcf[swPk] > halfAcf + 0.04;
+  }
+
   final multipliers = <double>[1.0, 2.0, 0.5, 1.5, 2.0 / 3.0];
   var chosenLag = bestLag;
   var bestCandidateScore = -1.0;
+
+  final bestLagIsBeatWithSwing = isSwingSupportedBeatLag(
+    snapLag(bestLag, maxLag),
+  );
+  final threeHalvesLag = (bestLag * 1.5).round();
+  final threeHalvesIsBeatWithSwing =
+      threeHalvesLag >= minLag &&
+      threeHalvesLag <= maxLag &&
+      isSwingSupportedBeatLag(snapLag(threeHalvesLag, maxLag));
 
   for (final m in multipliers) {
     final cand = bestLag * m;
     final lagInt = cand.round();
     if (lagInt < minLag || lagInt > maxLag) continue;
-    // Snap to local maximum within ±1 frame.
-    var pk = lagInt;
-    for (var d = -1; d <= 1; d++) {
-      final k = lagInt + d;
-      if (k >= minLag && k <= maxLag && rawAcf[k] > rawAcf[pk]) {
-        pk = k;
-      }
+    final pk = snapLag(lagInt, maxLag);
+    var sc = scoreCandidateLag(pk.toDouble());
+    // Apply M4b §4.4 swing penalty to ternary (3/2 and 2/3) tempo errors when
+    // the beat-level candidate explains both the beat and the swung off-beat.
+    if (bestLagIsBeatWithSwing && (m == 1.5 || m == 2.0 / 3.0)) {
+      sc *= 0.65;
+    } else if (threeHalvesIsBeatWithSwing && m == 1.0) {
+      sc *= 0.65;
     }
-    final sc = scoreCandidateLag(pk.toDouble());
     if (sc > bestCandidateScore) {
       bestCandidateScore = sc;
       chosenLag = pk;
@@ -679,19 +759,24 @@ _TempoEstimate _estimateTempo(
   }
 
   // Parabolic interpolation around chosenLag peak for sub-frame period (§4.3).
-  double refinedPeriod = chosenLag.toDouble();
-  if (chosenLag > minLag && chosenLag < maxLag) {
-    final y0 = rawAcf[chosenLag - 1];
-    final y1 = rawAcf[chosenLag];
-    final y2 = rawAcf[chosenLag + 1];
-    final denom = y0 - 2.0 * y1 + y2;
-    if (denom.abs() > 1e-9 && y1 >= y0 && y1 >= y2) {
-      final delta = 0.5 * (y0 - y2) / denom;
-      if (delta.abs() <= 0.5) {
-        refinedPeriod = chosenLag + delta;
+  double refineLagPeriod(int lagPk) {
+    var period = lagPk.toDouble();
+    if (lagPk > minLag && lagPk < maxLag) {
+      final y0 = rawAcf[lagPk - 1];
+      final y1 = rawAcf[lagPk];
+      final y2 = rawAcf[lagPk + 1];
+      final denom = y0 - 2.0 * y1 + y2;
+      if (denom.abs() > 1e-9 && y1 >= y0 && y1 >= y2) {
+        final delta = 0.5 * (y0 - y2) / denom;
+        if (delta.abs() <= 0.5) {
+          period = lagPk + delta;
+        }
       }
     }
+    return period;
   }
+
+  final refinedPeriod = refineLagPeriod(chosenLag);
 
   final meanWeighted = sumWeighted / countLags;
   final peakHeightRatio = meanWeighted > 1e-9
@@ -705,10 +790,26 @@ _TempoEstimate _estimateTempo(
   final confidence = peakHeightRatio * acfGate;
   final bpm = (framesPerSec * 60.0) / refinedPeriod;
 
+  // M4b §4.1: Build up to 5 distinct tempoCandidates in 40–240 BPM, best first,
+  // including the octave relatives of the winner (×2, ×½, ×3/2, ×2/3).
+  final tempoCandidates = _buildTempoCandidates(
+    chosenLag: chosenLag,
+    winnerPeriod: refinedPeriod,
+    winnerBpm: bpm,
+    winnerScore: math.max(1e-6, bestCandidateScore),
+    framesPerSec: framesPerSec,
+    minLag40To240: math.max(2, (framesPerSec * 60.0 / 240.0).floor()),
+    maxLag: maxLag,
+    rawAcf: rawAcf,
+    lowAcf: lowAcf,
+    priorWeight: priorWeight,
+  );
+
   return _TempoEstimate(
     bpm: bpm,
     periodFrames: refinedPeriod,
     confidence: confidence,
+    candidates: tempoCandidates,
   );
 }
 
@@ -1131,4 +1232,971 @@ double _computeCombinedConfidence({
     return autocorrConfidence * ((beatMean - 1.5) / 0.7).clamp(0.0, 1.0);
   }
   return autocorrConfidence;
+}
+
+// =============================================================================
+// M4b (§4.1–§4.4): Tempo candidates, Re-tracking, Varying tempo, Swing feel
+// =============================================================================
+
+/// Builds up to 5 distinct [TempoCandidate]s in 40–240 BPM, best first,
+/// including the octave relatives of the winner (×2, ×½, ×3/2, ×2/3) when in
+/// 40–240 BPM (§4.1).
+List<TempoCandidate> _buildTempoCandidates({
+  required int chosenLag,
+  required double winnerPeriod,
+  required double winnerBpm,
+  required double winnerScore,
+  required double framesPerSec,
+  required int minLag40To240,
+  required int maxLag,
+  required Float64List rawAcf,
+  required Float64List lowAcf,
+  required double Function(double lag) priorWeight,
+}) {
+  final rawList =
+      <({double bpm, double period, double rawScore, bool isWinner})>[
+        (
+          bpm: (winnerBpm * 10.0).round() / 10.0,
+          period: winnerPeriod,
+          rawScore: winnerScore,
+          isWinner: true,
+        ),
+      ];
+
+  double scorePeriod(double period) {
+    final pk = period.round().clamp(minLag40To240, maxLag);
+    final w = priorWeight(period);
+    final acf = pk < rawAcf.length ? math.max(0.0, rawAcf[pk]) : 0.0;
+    final low = pk < lowAcf.length ? math.max(0.0, lowAcf[pk]) : 0.0;
+    final h2 = (2 * pk <= maxLag && 2 * pk < rawAcf.length)
+        ? 0.25 * math.max(0.0, rawAcf[2 * pk])
+        : 0.0;
+    return math.max(0.05, (acf + h2 + 0.30 * low) * w);
+  }
+
+  // Octave relatives of the winner in BPM: ×2, ×1/2, ×3/2, ×2/3.
+  const bpmMultipliers = <double>[2.0, 0.5, 1.5, 2.0 / 3.0];
+  for (final mult in bpmMultipliers) {
+    final relBpm = winnerBpm * mult;
+    if (relBpm < 40.0 || relBpm > 240.0) continue;
+    final relPeriod = (framesPerSec * 60.0) / relBpm;
+    final roundedBpm = (relBpm * 10.0).round() / 10.0;
+    if (rawList.any((c) => (c.bpm - roundedBpm).abs() <= 1.5)) continue;
+    rawList.add((
+      bpm: roundedBpm,
+      period: relPeriod,
+      rawScore: scorePeriod(relPeriod),
+      isWinner: false,
+    ));
+  }
+
+  // If fewer than 5 candidates (e.g. a relative was outside 40–240), fill from
+  // the strongest distinct local autocorrelation peaks in 40–240 BPM.
+  if (rawList.length < 5) {
+    final peakLags = <({int lag, double score})>[];
+    for (var lag = minLag40To240 + 1; lag < maxLag; lag++) {
+      if (rawAcf[lag] >= rawAcf[lag - 1] &&
+          rawAcf[lag] >= rawAcf[lag + 1] &&
+          rawAcf[lag] > 0.05) {
+        peakLags.add((lag: lag, score: scorePeriod(lag.toDouble())));
+      }
+    }
+    peakLags.sort((a, b) => b.score.compareTo(a.score));
+    for (final pk in peakLags) {
+      if (rawList.length >= 5) break;
+      final candBpm = ((framesPerSec * 60.0 / pk.lag) * 10.0).round() / 10.0;
+      if (candBpm < 40.0 || candBpm > 240.0) continue;
+      if (rawList.any((c) => (c.bpm - candBpm).abs() <= 2.0)) continue;
+      rawList.add((
+        bpm: candBpm,
+        period: pk.lag.toDouble(),
+        rawScore: pk.score,
+        isWinner: false,
+      ));
+    }
+  }
+
+  // Keep winner first (score 1.0), sort the rest by rawScore descending.
+  final winner = rawList.first;
+  final others = rawList.skip(1).toList()
+    ..sort((a, b) => b.rawScore.compareTo(a.rawScore));
+  final maxScore = math.max(
+    winner.rawScore,
+    others.isEmpty ? 0.0 : others.first.rawScore,
+  );
+
+  final out = <TempoCandidate>[
+    TempoCandidate(bpm: winner.bpm, periodFrames: winner.period, score: 1.0),
+    for (final c in others.take(4))
+      TempoCandidate(
+        bpm: c.bpm,
+        periodFrames: c.period,
+        score: maxScore > 1e-9
+            ? (c.rawScore / maxScore).clamp(0.01, 0.99)
+            : 0.5,
+      ),
+  ];
+  return out;
+}
+
+/// Pure function that re-tracks beats on a cached [BeatAnalysis] with the
+/// user's [TrackingOptions] (chosen tempo and steady/varying mode) and refines
+/// each beat to sample accuracy from [wavPath] (§4.2, §4.3).
+///
+/// When [options] is the default (`targetBpm == null`, `tempoMode == steady`)
+/// and [analysis] already has tracked candidates, returns [analysis] unchanged
+/// so steady-song results and ½×/2× round-trips are identical to `main` (§4.5).
+Future<BeatAnalysis> retrack(
+  BeatAnalysis analysis,
+  TrackingOptions options, {
+  required String wavPath,
+  bool Function()? isCancelled,
+}) async {
+  void checkCancel() {
+    if (isCancelled != null && isCancelled()) {
+      throw const AnalysisCancelledException();
+    }
+  }
+
+  checkCancel();
+  final onsetEnv = analysis.onsetEnvelope;
+  if (onsetEnv.isEmpty || analysis.sampleRate <= 0 || analysis.hopSize <= 0) {
+    return analysis;
+  }
+
+  // Default option round-trip guarantee (§4.2, §4.5, §8):
+  // If steady mode is selected and targetBpm is null (Auto) or matches the
+  // analyser's default BPM (when no override is active), return the original
+  // analysis if targetBpm is null.
+  if (options.tempoMode == TempoMode.steady &&
+      options.targetBpm == null &&
+      analysis.candidates.isNotEmpty) {
+    // Re-running on a cached analysis without an override returns the exact
+    // same beats, BPM, and phase as the initial analysis.
+    final framesPerSec = analysis.sampleRate / analysis.hopSize;
+    final basePeriod = analysis.tempoCandidates.isNotEmpty
+        ? analysis.tempoCandidates.first.periodFrames
+        : (analysis.bpm > 0 ? framesPerSec * 60.0 / analysis.bpm : 0.0);
+    if (basePeriod <= 0) return analysis;
+
+    final trackedFrames = _trackBeatsEllis(onsetEnv, periodFrames: basePeriod);
+    checkCancel();
+
+    final file = File(wavPath);
+    final info = await readWavInfo(file);
+    final raf = await file.open();
+    List<CandidateBeat> candidates;
+    try {
+      candidates = await _refineBeatsToSample(
+        raf: raf,
+        info: info,
+        trackedFrames: trackedFrames,
+        onsetEnv: onsetEnv,
+        frameLowEnergy: analysis.frameLowEnergy,
+        periodFrames: basePeriod,
+        checkCancel: checkCancel,
+      );
+    } finally {
+      await raf.close();
+    }
+
+    final prelimBpm =
+        ((framesPerSec * 60.0 / basePeriod) * 10.0).round() / 10.0;
+    final finalBpm = _computeFinalBpmFromBeats(
+      candidates,
+      sampleRate: analysis.sampleRate,
+      fallbackBpm: prelimBpm,
+    );
+    final gridPeriodSamples = finalBpm > 0
+        ? (analysis.sampleRate * 60.0 / finalBpm).round()
+        : 1;
+    final beatPhaseSample = candidates.isNotEmpty && gridPeriodSamples > 0
+        ? candidates.first.sample % gridPeriodSamples
+        : 0;
+    final swing = _estimateSwingFromBeats(
+      onsetEnv: onsetEnv,
+      trackedFrames: trackedFrames,
+    );
+
+    return analysis.copyWithTracking(
+      bpm: finalBpm,
+      beatPhaseSample: beatPhaseSample,
+      candidates: candidates,
+      swing: swing,
+    );
+  }
+
+  final framesPerSec = analysis.sampleRate / analysis.hopSize;
+  final requestedBpm =
+      (options.targetBpm ?? (analysis.bpm > 0 ? analysis.bpm : 120.0)).clamp(
+        40.0,
+        240.0,
+      );
+
+  // If the requested BPM matches one of the precomputed tempoCandidates (within
+  // 0.15 BPM) AND that candidate's period agrees with `requestedBpm` within 5%
+  // (in case `analysis.bpm` was refined by beat intervals away from a sub-harmonic
+  // autocorrelation lag), use its parabolically refined periodFrames; otherwise
+  // compute directly from requestedBpm.
+  double targetPeriodFrames = (framesPerSec * 60.0) / requestedBpm;
+  for (final tc in analysis.tempoCandidates) {
+    final tcBpmFromPeriod = tc.periodFrames > 0
+        ? (framesPerSec * 60.0) / tc.periodFrames
+        : 0.0;
+    if ((tc.bpm - requestedBpm).abs() <= 0.15 &&
+        (tcBpmFromPeriod - requestedBpm).abs() <= 1.5) {
+      targetPeriodFrames = tc.periodFrames;
+      break;
+    }
+  }
+
+  final List<int> trackedFrames;
+  double medianBpmForVarying = requestedBpm;
+
+  if (options.tempoMode == TempoMode.steady) {
+    trackedFrames = _trackBeatsEllis(
+      onsetEnv,
+      periodFrames: targetPeriodFrames,
+    );
+  } else {
+    // Varying tempo mode (§4.3):
+    // Compute or scale the local tempo curve constrained to the chosen octave
+    // around `targetPeriodFrames`, interpolate to a per-frame period `P(t)`,
+    // and run the varying-period Ellis DP tracker.
+    final localCurve = _resolveLocalTempoBlocksForTarget(
+      analysis: analysis,
+      targetPeriodFrames: targetPeriodFrames,
+    );
+    final framePeriods = _interpolateBlockPeriodsToFrames(
+      blockPeriods: localCurve,
+      hopCount: onsetEnv.length,
+      framesPerBlock: math.max(1, framesPerSec.round()),
+      defaultPeriod: targetPeriodFrames,
+    );
+    trackedFrames = _trackBeatsEllisVarying(
+      onsetEnv,
+      framePeriods: framePeriods,
+    );
+    medianBpmForVarying = _computeMedianBpmFromBlockPeriods(
+      localCurve,
+      framesPerSec: framesPerSec,
+      fallbackBpm: requestedBpm,
+    );
+  }
+
+  checkCancel();
+
+  final file = File(wavPath);
+  final info = await readWavInfo(file);
+  final raf = await file.open();
+  List<CandidateBeat> candidates;
+  try {
+    candidates = await _refineBeatsToSample(
+      raf: raf,
+      info: info,
+      trackedFrames: trackedFrames,
+      onsetEnv: onsetEnv,
+      frameLowEnergy: analysis.frameLowEnergy,
+      periodFrames: targetPeriodFrames,
+      checkCancel: checkCancel,
+    );
+  } finally {
+    await raf.close();
+  }
+
+  final double finalBpm;
+  if (options.tempoMode == TempoMode.varying) {
+    // §4.3: In varying mode the project's bpm is the median local tempo.
+    finalBpm = medianBpmForVarying;
+  } else {
+    final prelimBpm = (requestedBpm * 10.0).round() / 10.0;
+    finalBpm = _computeFinalBpmFromBeats(
+      candidates,
+      sampleRate: analysis.sampleRate,
+      fallbackBpm: prelimBpm,
+    );
+  }
+
+  final gridPeriodSamples = finalBpm > 0
+      ? (analysis.sampleRate * 60.0 / finalBpm).round()
+      : 1;
+  final beatPhaseSample = candidates.isNotEmpty && gridPeriodSamples > 0
+      ? candidates.first.sample % gridPeriodSamples
+      : 0;
+  final swing = _estimateSwingFromBeats(
+    onsetEnv: onsetEnv,
+    trackedFrames: trackedFrames,
+  );
+
+  return analysis.copyWithTracking(
+    bpm: finalBpm,
+    beatPhaseSample: beatPhaseSample,
+    candidates: candidates,
+    swing: swing,
+  );
+}
+
+/// Output of the sliding-window tempogram and Viterbi path (§4.3).
+class _LocalTempoCurve {
+  const _LocalTempoCurve({required this.blockPeriods, required this.stability});
+
+  /// One smoothed period value (in hop frames) per ~1 s block.
+  final Float32List blockPeriods;
+
+  /// Relative spread of [blockPeriods] after outlier removal.
+  final double stability;
+}
+
+// HEURISTIC: Viterbi transition penalty weight for local tempo tracking (§4.3).
+// Penalises frame-period jumps by `viterbiJumpPenalty * (log(P_k / P_prev))^2`
+// so a genuine step change (e.g. 100 -> 140 BPM) transitions cleanly within
+// 1–2 blocks while random per-window noise is smoothed out.
+const double _viterbiJumpPenalty = 18.0;
+
+/// Computes a smoothed local tempo period curve over 1 s steps using 6 s
+/// sliding windows of [onsetEnv], constrained to the global octave around
+/// [anchorPeriodFrames] (`[0.62 * P, 1.62 * P]`) so a window cannot flip to
+/// half or double tempo (§4.3).
+_LocalTempoCurve _computeLocalTempoCurve(
+  Float32List onsetEnv, {
+  required Float32List lowMidOnset,
+  required int sampleRate,
+  required int hopSize,
+  required double anchorPeriodFrames,
+}) {
+  final n = onsetEnv.length;
+  final framesPerSec = sampleRate / hopSize;
+  final blockStep = math.max(1, framesPerSec.round()); // ~1 s step
+  final winLen = math.max(
+    blockStep * 4,
+    (framesPerSec * 6.0).round(),
+  ); // ~6 s window
+
+  if (n < blockStep * 3 || anchorPeriodFrames < 2.0) {
+    return _LocalTempoCurve(
+      blockPeriods: Float32List.fromList([anchorPeriodFrames]),
+      stability: 0.0,
+    );
+  }
+
+  final numBlocks = math.max(1, (n + blockStep - 1) ~/ blockStep);
+
+  // Constrain candidate lags to the global octave around the song's local-period
+  // center: first do a quick per-block fundamental-lag scan in
+  // `[0.65 * anchor, 1.35 * anchor]` (ratio = 1.35 / 0.65 = 2.07), using the
+  // same 2x-harmonic + low-band scoring and sub-harmonic suppression so each
+  // window identifies its true fundamental beat lag rather than a 2x sub-harmonic.
+  final scanMin = math.max(3, (anchorPeriodFrames * 0.65).floor());
+  final scanMax = math.min(winLen ~/ 2, (anchorPeriodFrames * 1.35).ceil());
+  final coarseBestLags = <int>[];
+  for (var b = 0; b < numBlocks; b++) {
+    final center = b * blockStep + (blockStep ~/ 2);
+    final wStart = math.max(
+      0,
+      math.min(math.max(0, n - winLen), center - winLen ~/ 2),
+    );
+    final wEnd = math.min(n, wStart + winLen);
+    final wCount = wEnd - wStart;
+    if (wCount <= scanMax + 2) continue;
+    var meanO = 0.0;
+    for (var t = wStart; t < wEnd; t++) {
+      meanO += onsetEnv[t];
+    }
+    meanO /= wCount;
+    var r0 = 0.0;
+    for (var t = wStart; t < wEnd; t++) {
+      final c = onsetEnv[t] - meanO;
+      r0 += c * c;
+    }
+    if (r0 <= 1e-6) continue;
+
+    final acfLim = math.min(wCount - 2, scanMax * 2 + 1);
+    final acfTmp = Float64List(acfLim + 1);
+    for (var lag = math.max(2, scanMin ~/ 2); lag <= acfLim; lag++) {
+      var sum = 0.0;
+      final limit = wEnd - lag;
+      for (var t = wStart; t < limit; t++) {
+        sum += (onsetEnv[t] - meanO) * (onsetEnv[t + lag] - meanO);
+      }
+      final cnt = limit - wStart;
+      acfTmp[lag] = cnt > 0 ? (sum / cnt) / (r0 / wCount) : 0.0;
+    }
+
+    var bestL = anchorPeriodFrames.round().clamp(scanMin, scanMax);
+    var bestScore = -1e9;
+    for (var lag = scanMin; lag <= scanMax; lag++) {
+      var val = math.max(0.0, acfTmp[lag]);
+      if (2 * lag <= acfLim) {
+        val += 0.25 * math.max(0.0, acfTmp[2 * lag]);
+      }
+      final halfL = (lag * 0.5).round();
+      if (halfL >= scanMin && halfL <= acfLim && acfTmp[halfL] > 0.20) {
+        val = math.max(0.0, val - 0.65 * acfTmp[halfL]);
+      }
+      final bpmHere = (framesPerSec * 60.0) / lag;
+      final lr = math.log(bpmHere / 120.0) / math.ln2;
+      final w = math.exp(-0.5 * lr * lr);
+      final sc = val * w;
+      if (sc > bestScore) {
+        bestScore = sc;
+        bestL = lag;
+      }
+    }
+    coarseBestLags.add(bestL);
+  }
+
+  var octaveCenterPeriod = anchorPeriodFrames;
+  if (coarseBestLags.length >= 4) {
+    final sortedCoarse = [...coarseBestLags]..sort();
+    final p20 = sortedCoarse[(sortedCoarse.length * 0.20).floor()];
+    final p80 = sortedCoarse[(sortedCoarse.length * 0.80).floor()];
+    // Geometric mean of 20th and 80th percentile local periods centers the
+    // octave window symmetrically between the slowest and fastest sections.
+    final geoMid = math.sqrt(p20 * p80);
+    octaveCenterPeriod = geoMid.clamp(
+      anchorPeriodFrames * 0.78,
+      anchorPeriodFrames * 1.28,
+    );
+  }
+
+  // Span `[0.73 * center, 1.32 * center]` (ratio = 1.81 < 2.0, strictly under
+  // one octave so no 2x harmonic exists in the state space).
+  final minLag = math.max(3, (octaveCenterPeriod * 0.73).floor());
+  final maxLag = math.min(winLen ~/ 2, (octaveCenterPeriod * 1.32).ceil());
+  if (maxLag <= minLag) {
+    final flat = Float32List(numBlocks);
+    for (var i = 0; i < numBlocks; i++) {
+      flat[i] = anchorPeriodFrames;
+    }
+    return _LocalTempoCurve(blockPeriods: flat, stability: 0.0);
+  }
+
+  final numStates = maxLag - minLag + 1;
+  // Per-block emission score for each candidate integer lag in [minLag..maxLag].
+  final emissions = List<Float64List>.generate(
+    numBlocks,
+    (_) => Float64List(numStates),
+  );
+  // Also keep raw window ACF per block for sub-frame parabolic refinement.
+  final blockAcf = List<Float64List>.generate(
+    numBlocks,
+    (_) => Float64List(maxLag + 2),
+  );
+
+  for (var b = 0; b < numBlocks; b++) {
+    final center = b * blockStep + (blockStep ~/ 2);
+    final wStart = math.max(
+      0,
+      math.min(math.max(0, n - winLen), center - winLen ~/ 2),
+    );
+    final wEnd = math.min(n, wStart + winLen);
+    final wCount = wEnd - wStart;
+
+    if (wCount <= maxLag + 2) {
+      for (var s = 0; s < numStates; s++) {
+        final lag = minLag + s;
+        final dist = math.log(lag / anchorPeriodFrames);
+        emissions[b][s] = -2.0 * dist * dist;
+      }
+      continue;
+    }
+
+    var meanO = 0.0;
+    for (var t = wStart; t < wEnd; t++) {
+      meanO += onsetEnv[t];
+    }
+    meanO /= wCount;
+
+    var r0 = 0.0;
+    for (var t = wStart; t < wEnd; t++) {
+      final c = onsetEnv[t] - meanO;
+      r0 += c * c;
+    }
+
+    if (r0 <= 1e-6) {
+      for (var s = 0; s < numStates; s++) {
+        final lag = minLag + s;
+        final dist = math.log(lag / anchorPeriodFrames);
+        emissions[b][s] = -2.0 * dist * dist;
+      }
+      continue;
+    }
+
+    final acf = blockAcf[b];
+    final acfMaxLag = math.min(wCount - 2, maxLag * 2 + 2);
+    final acfMinLag = math.max(2, minLag ~/ 2);
+    final fullAcf = Float64List(acfMaxLag + 1);
+    for (var lag = acfMinLag; lag <= acfMaxLag; lag++) {
+      var sum = 0.0;
+      final limit = wEnd - lag;
+      for (var t = wStart; t < limit; t++) {
+        sum += (onsetEnv[t] - meanO) * (onsetEnv[t + lag] - meanO);
+      }
+      final count = limit - wStart;
+      final val = count > 0 ? (sum / count) / (r0 / wCount) : 0.0;
+      fullAcf[lag] = val;
+      if (lag < acf.length) acf[lag] = val;
+    }
+
+    for (var s = 0; s < numStates; s++) {
+      final lag = minLag + s;
+      // Include 2x-lag harmonic support (same as global scoreCandidateLag in §4.3)
+      // and penalise sub-harmonic lags when `lag / 2` has strong periodicity.
+      final h2 = (2 * lag <= acfMaxLag)
+          ? 0.25 * math.max(0.0, fullAcf[2 * lag])
+          : 0.0;
+      var baseScore = math.max(0.0, acf[lag]) + h2;
+      final halfLag = (lag * 0.5).round();
+      if (halfLag >= minLag && halfLag <= acfMaxLag) {
+        final halfVal = math.max(0.0, fullAcf[halfLag]);
+        if (halfVal > 0.20) {
+          baseScore = math.max(0.0, baseScore - 0.55 * halfVal);
+        }
+      }
+      // Also penalise 1.5x ternary sub-harmonic lags (e.g. 3/2 * T_100 = 66.7 BPM
+      // or 5/4 * T_100 = 80 BPM) when a stronger shorter beat lag `2/3 * lag`
+      // exists inside the band.
+      final twoThirdsLag = (lag * (2.0 / 3.0)).round();
+      if (twoThirdsLag >= minLag && twoThirdsLag <= acfMaxLag) {
+        final ttVal = math.max(0.0, fullAcf[twoThirdsLag]);
+        if (ttVal > 0.20) {
+          baseScore = math.max(0.0, baseScore - 0.45 * ttVal);
+        }
+      }
+      // Also use the global log-normal prior on BPM centered on 120 BPM (§4.3)
+      // combined with a gentle anchor prior so windows stay near the true beat level.
+      final bpmHere = (framesPerSec * 60.0) / lag;
+      final logRatio120 = math.log(bpmHere / 120.0) / math.ln2;
+      final prior120 = math.exp(-0.5 * logRatio120 * logRatio120);
+      final anchorDist = math.log(lag / anchorPeriodFrames);
+      final anchorPrior = math.exp(
+        -0.5 * (anchorDist / 0.35) * (anchorDist / 0.35),
+      );
+      emissions[b][s] =
+          baseScore * (0.55 + 0.25 * prior120 + 0.20 * anchorPrior);
+    }
+  }
+
+  // Viterbi dynamic programming path over candidate lags (§4.3).
+  final dp = Float64List(numStates);
+  final prevDp = Float64List(numStates);
+  final backptr = List<Int32List>.generate(
+    numBlocks,
+    (_) => Int32List(numStates),
+  );
+
+  final logLags = Float64List(numStates);
+  for (var s = 0; s < numStates; s++) {
+    logLags[s] = math.log(minLag + s);
+    prevDp[s] = emissions[0][s];
+  }
+
+  for (var b = 1; b < numBlocks; b++) {
+    for (var s = 0; s < numStates; s++) {
+      final lgS = logLags[s];
+      var bestVal = -1e18;
+      var bestPrev = s;
+      for (var p = 0; p < numStates; p++) {
+        final dLog = lgS - logLags[p];
+        final val = prevDp[p] - _viterbiJumpPenalty * dLog * dLog;
+        if (val > bestVal) {
+          bestVal = val;
+          bestPrev = p;
+        }
+      }
+      dp[s] = emissions[b][s] + bestVal;
+      backptr[b][s] = bestPrev;
+    }
+    for (var s = 0; s < numStates; s++) {
+      prevDp[s] = dp[s];
+    }
+  }
+
+  var bestLastState = 0;
+  var bestLastScore = -1e18;
+  for (var s = 0; s < numStates; s++) {
+    if (prevDp[s] > bestLastScore) {
+      bestLastScore = prevDp[s];
+      bestLastState = s;
+    }
+  }
+
+  final statePath = Int32List(numBlocks);
+  var curState = bestLastState;
+  for (var b = numBlocks - 1; b >= 0; b--) {
+    statePath[b] = curState;
+    if (b > 0) {
+      curState = backptr[b][curState];
+    }
+  }
+
+  // Refine each block's integer lag using parabolic interpolation on blockAcf[b].
+  final blockPeriods = Float32List(numBlocks);
+  for (var b = 0; b < numBlocks; b++) {
+    final lag = minLag + statePath[b];
+    var refined = lag.toDouble();
+    final acf = blockAcf[b];
+    if (lag - 1 >= 2 && lag + 1 < acf.length) {
+      final y0 = acf[lag - 1];
+      final y1 = acf[lag];
+      final y2 = acf[lag + 1];
+      final denom = y0 - 2.0 * y1 + y2;
+      if (denom.abs() > 1e-9 && y1 >= y0 && y1 >= y2) {
+        final delta = 0.5 * (y0 - y2) / denom;
+        if (delta.abs() <= 0.5) {
+          refined = lag + delta;
+        }
+      }
+    }
+    blockPeriods[b] = refined;
+  }
+
+  // Light 3-point moving average on continuous periods within continuous runs
+  // (where consecutive integer states differ by <= 1 frame) so ramps and drifts
+  // have smooth sub-frame periods without blurring sharp step changes.
+  final smoothed = Float32List(numBlocks);
+  for (var b = 0; b < numBlocks; b++) {
+    var sum = blockPeriods[b];
+    var weight = 1.0;
+    if (b > 0 && (statePath[b] - statePath[b - 1]).abs() <= 1) {
+      sum += 0.5 * blockPeriods[b - 1];
+      weight += 0.5;
+    }
+    if (b + 1 < numBlocks && (statePath[b + 1] - statePath[b]).abs() <= 1) {
+      sum += 0.5 * blockPeriods[b + 1];
+      weight += 0.5;
+    }
+    smoothed[b] = sum / weight;
+  }
+
+  final stability = _computeTempoStability(smoothed);
+  return _LocalTempoCurve(blockPeriods: smoothed, stability: stability);
+}
+
+/// Computes `tempoStability` as the relative spread (`(P85 - P15) / median`)
+/// of local periods after trimming the top and bottom 15% as outliers (§4.1, §4.3).
+double _computeTempoStability(Float32List blockPeriods) {
+  if (blockPeriods.length < 4) return 0.0;
+  // Drop first and last block (edge windows) when there are enough blocks.
+  final start = blockPeriods.length > 6 ? 1 : 0;
+  final end = blockPeriods.length > 6
+      ? blockPeriods.length - 1
+      : blockPeriods.length;
+  final sorted = Float64List.fromList(blockPeriods.sublist(start, end))..sort();
+  if (sorted.isEmpty) return 0.0;
+
+  double quantile(double q) {
+    final pos = q * (sorted.length - 1);
+    final lo = pos.floor();
+    final hi = pos.ceil();
+    if (lo == hi) return sorted[lo];
+    return sorted[lo] * (1.0 - (pos - lo)) + sorted[hi] * (pos - lo);
+  }
+
+  final median = quantile(0.50);
+  if (median <= 1e-6) return 0.0;
+  final p15 = quantile(0.15);
+  final p85 = quantile(0.85);
+  return (p85 - p15) / median;
+}
+
+/// Resolves the per-block local tempo curve for [targetPeriodFrames] during
+/// [retrack] in varying mode.
+Float32List _resolveLocalTempoBlocksForTarget({
+  required BeatAnalysis analysis,
+  required double targetPeriodFrames,
+}) {
+  if (analysis.onsetEnvelope.isNotEmpty) {
+    return _computeLocalTempoCurve(
+      analysis.onsetEnvelope,
+      lowMidOnset: analysis.lowMidOnsetEnvelope,
+      sampleRate: analysis.sampleRate,
+      hopSize: analysis.hopSize,
+      anchorPeriodFrames: targetPeriodFrames,
+    ).blockPeriods;
+  }
+  if (analysis.localTempo.isEmpty) {
+    return Float32List.fromList([targetPeriodFrames]);
+  }
+  final sorted = Float64List.fromList(analysis.localTempo)..sort();
+  final median = sorted[sorted.length ~/ 2];
+  final scale = median > 1e-6 ? targetPeriodFrames / median : 1.0;
+  final out = Float32List(analysis.localTempo.length);
+  for (var i = 0; i < out.length; i++) {
+    out[i] = analysis.localTempo[i] * scale;
+  }
+  return out;
+}
+
+/// Linearly interpolates per-block periods to a per-hop-frame period `P(t)` (§4.3).
+Float32List _interpolateBlockPeriodsToFrames({
+  required Float32List blockPeriods,
+  required int hopCount,
+  required int framesPerBlock,
+  required double defaultPeriod,
+}) {
+  final out = Float32List(hopCount);
+  if (blockPeriods.isEmpty) {
+    out.fillRange(0, hopCount, defaultPeriod);
+    return out;
+  }
+  if (blockPeriods.length == 1) {
+    out.fillRange(0, hopCount, blockPeriods[0]);
+    return out;
+  }
+
+  final halfBlock = framesPerBlock * 0.5;
+  final lastBlock = blockPeriods.length - 1;
+  for (var t = 0; t < hopCount; t++) {
+    final pos = (t - halfBlock) / framesPerBlock;
+    if (pos <= 0.0) {
+      out[t] = blockPeriods[0];
+    } else if (pos >= lastBlock) {
+      out[t] = blockPeriods[lastBlock];
+    } else {
+      final b0 = pos.floor();
+      final frac = pos - b0;
+      out[t] = blockPeriods[b0] * (1.0 - frac) + blockPeriods[b0 + 1] * frac;
+    }
+  }
+  return out;
+}
+
+/// Computes median BPM from [blockPeriods], rounded to 0.1 BPM (§4.3).
+double _computeMedianBpmFromBlockPeriods(
+  Float32List blockPeriods, {
+  required double framesPerSec,
+  required double fallbackBpm,
+}) {
+  if (blockPeriods.isEmpty) {
+    return (fallbackBpm * 10.0).round() / 10.0;
+  }
+  final sorted = Float64List.fromList(blockPeriods)..sort();
+  final mid = sorted.length ~/ 2;
+  final medianPeriod = sorted.length.isOdd
+      ? sorted[mid]
+      : 0.5 * (sorted[mid - 1] + sorted[mid]);
+  if (medianPeriod <= 1e-6) {
+    return (fallbackBpm * 10.0).round() / 10.0;
+  }
+  final bpm = (framesPerSec * 60.0) / medianPeriod;
+  return (bpm * 10.0).round() / 10.0;
+}
+
+/// Varying-period dynamic-programming beat tracker (Ellis 2007 with local
+/// period `P(t)`, §4.3):
+/// `C[t] = O[t] + max over tau in [t - 2*P(t), t - P(t)/2] of (C[tau] - alpha * (log((t - tau)/P(t)))^2)`
+/// Same `alpha = 100.0` as M4, same backtracking, same `±P(t)/8` peak snapping.
+List<int> _trackBeatsEllisVarying(
+  Float32List onsetEnv, {
+  required Float32List framePeriods,
+}) {
+  final n = onsetEnv.length;
+  if (n == 0 || framePeriods.length != n) return const <int>[];
+
+  const alpha = 100.0;
+  const onsetWeight = 12.0;
+
+  // Precompute log(dt) table for fast inner-loop transition penalty evaluation.
+  var maxPossibleStep = 4;
+  for (var t = 0; t < n; t++) {
+    final s = (framePeriods[t] * 2.0).round();
+    if (s > maxPossibleStep) maxPossibleStep = s;
+  }
+  final logDt = Float64List(maxPossibleStep + 2);
+  for (var dt = 1; dt < logDt.length; dt++) {
+    logDt[dt] = math.log(dt);
+  }
+
+  final cScore = Float64List(n);
+  final backlink = Int32List(n);
+
+  for (var t = 0; t < n; t++) {
+    backlink[t] = -1;
+    final pT = math.max(2.0, framePeriods[t]);
+    final logPt = math.log(pT);
+    final minStep = math.max(1, (pT * 0.5).round());
+    final maxStep = math.min(
+      logDt.length - 1,
+      math.max(minStep + 1, (pT * 2.0).round()),
+    );
+
+    final localO = onsetEnv[t] * onsetWeight;
+    var bestPrev = 0.0;
+    var bestTau = -1;
+
+    final tauMin = math.max(0, t - maxStep);
+    final tauMax = t - minStep;
+    for (var tau = tauMin; tau <= tauMax; tau++) {
+      final dt = t - tau;
+      final lg = logDt[dt] - logPt;
+      final candidate = cScore[tau] - alpha * lg * lg;
+      if (candidate > bestPrev) {
+        bestPrev = candidate;
+        bestTau = tau;
+      }
+    }
+    cScore[t] = localO + bestPrev;
+    backlink[t] = bestTau;
+  }
+
+  var lastActive = n - 1;
+  for (var t = n - 1; t >= 0; t--) {
+    if (onsetEnv[t] > 1.5) {
+      lastActive = t;
+      break;
+    }
+  }
+  final endPeriod = math.max(2.0, framePeriods[lastActive]);
+  final searchEnd = math.min(n - 1, lastActive + (endPeriod * 0.25).round());
+  final searchStart = math.max(0, searchEnd - endPeriod.ceil());
+
+  var bestEnd = searchEnd;
+  var bestEndScore = -1e18;
+  for (var t = searchStart; t <= searchEnd; t++) {
+    if (cScore[t] > bestEndScore) {
+      bestEndScore = cScore[t];
+      bestEnd = t;
+    }
+  }
+
+  final rawFrames = <int>[];
+  var cur = bestEnd;
+  while (cur >= 0) {
+    rawFrames.add(cur);
+    cur = backlink[cur];
+  }
+  final ordered = rawFrames.reversed.toList();
+
+  // Snap each tracked beat to the strongest O peak within ±P(t)/8 frames (§4.3).
+  final snapped = <int>[];
+  for (final f in ordered) {
+    final pF = math.max(2.0, framePeriods[f]);
+    final snapRadius = math.max(1, (pF / 8.0).round());
+    final lo = math.max(0, f - snapRadius);
+    final hi = math.min(n - 1, f + snapRadius);
+    var bestF = f;
+    var bestO = onsetEnv[f];
+    for (var k = lo; k <= hi; k++) {
+      if (onsetEnv[k] > bestO) {
+        bestO = onsetEnv[k];
+        bestF = k;
+      }
+    }
+    if (snapped.isEmpty || bestF > snapped.last) {
+      snapped.add(bestF);
+    }
+  }
+
+  while (snapped.isNotEmpty && onsetEnv[snapped.first] < 0.35) {
+    snapped.removeAt(0);
+  }
+  while (snapped.isNotEmpty && onsetEnv[snapped.last] < 0.35) {
+    snapped.removeLast();
+  }
+
+  return snapped;
+}
+
+// HEURISTIC: Swing ratio estimation from inter-beat onset peak phases (§4.4).
+// After tracking, for each consecutive pair of tracked beats `[f0, f1]`, we
+// locate interior onset peaks at fraction `phi = (f - f0) / (f1 - f0)` in
+// `[0.25, 0.82]` and accumulate their onset strengths into a smoothed phase
+// histogram. A dominant peak near 0.50 = straight; 0.60–0.75 = swung.
+SwingEstimate _estimateSwingFromBeats({
+  required Float32List onsetEnv,
+  required List<int> trackedFrames,
+}) {
+  if (trackedFrames.length < 8 || onsetEnv.isEmpty) {
+    return const SwingEstimate();
+  }
+
+  // 60 phase bins spanning [0.25, 0.85] (step 0.01 of a beat).
+  const minPhi = 0.25;
+  const maxPhi = 0.85;
+  const numBins = 60;
+  const binWidth = (maxPhi - minPhi) / numBins; // 0.01
+  final hist = Float64List(numBins);
+
+  var intervalsWithSubdivision = 0;
+  var totalIntervals = 0;
+
+  for (var i = 0; i < trackedFrames.length - 1; i++) {
+    final f0 = trackedFrames[i];
+    final f1 = trackedFrames[i + 1];
+    final span = f1 - f0;
+    if (span < 6) continue;
+    totalIntervals++;
+
+    var hasInteriorPeak = false;
+    final kStart = f0 + math.max<int>(2, (span * 0.25).floor());
+    final kEnd = f0 + math.min<int>(span - 2, (span * 0.82).ceil());
+
+    for (var k = kStart; k <= kEnd; k++) {
+      final val = onsetEnv[k];
+      if (val < 0.35) continue;
+      if (val >= onsetEnv[k - 1] && val >= onsetEnv[k + 1]) {
+        // Parabolic interpolation of the onset peak frame for sub-frame phase precision.
+        var peakFrame = k.toDouble();
+        final y0 = onsetEnv[k - 1];
+        final y1 = val;
+        final y2 = onsetEnv[k + 1];
+        final denom = y0 - 2.0 * y1 + y2;
+        if (denom.abs() > 1e-6) {
+          final delta = 0.5 * (y0 - y2) / denom;
+          if (delta.abs() <= 0.5) peakFrame = k + delta;
+        }
+        final phi = (peakFrame - f0) / span;
+        if (phi >= minPhi && phi < maxPhi) {
+          hasInteriorPeak = true;
+          final centerBin = (phi - minPhi) / binWidth;
+          // Deposit with a Gaussian kernel (sigma = 1.5 bins = 0.015 beat)
+          // so frame discretization doesn't split a peak across neighbouring bins.
+          final bLo = math.max(0, (centerBin - 4).floor());
+          final bHi = math.min(numBins - 1, (centerBin + 4).ceil());
+          for (var b = bLo; b <= bHi; b++) {
+            final d = (b + 0.5 - centerBin) / 1.5;
+            hist[b] += val * math.exp(-0.5 * d * d);
+          }
+        }
+      }
+    }
+    if (hasInteriorPeak) intervalsWithSubdivision++;
+  }
+
+  if (totalIntervals < 4 || intervalsWithSubdivision < totalIntervals ~/ 4) {
+    return const SwingEstimate();
+  }
+
+  var bestBin = 0;
+  var peakWeight = 0.0;
+  var totalWeight = 0.0;
+  for (var b = 0; b < numBins; b++) {
+    totalWeight += hist[b];
+    if (hist[b] > peakWeight) {
+      peakWeight = hist[b];
+      bestBin = b;
+    }
+  }
+  if (totalWeight <= 1e-6) return const SwingEstimate();
+
+  final dominantRatio = (minPhi + (bestBin + 0.5) * binWidth).clamp(0.25, 0.85);
+
+  // Concentration of weight within ±0.04 around dominantRatio vs total interior weight.
+  var nearPeakWeight = 0.0;
+  for (
+    var b = math.max(0, bestBin - 4);
+    b <= math.min(numBins - 1, bestBin + 4);
+    b++
+  ) {
+    nearPeakWeight += hist[b];
+  }
+  final concentration = (nearPeakWeight / totalWeight).clamp(0.0, 1.0);
+  final coverage = (intervalsWithSubdivision / totalIntervals).clamp(0.0, 1.0);
+  final confidence = (concentration * math.min(1.0, coverage * 1.4)).clamp(
+    0.0,
+    1.0,
+  );
+
+  return SwingEstimate(ratio: dominantRatio, confidence: confidence);
 }
