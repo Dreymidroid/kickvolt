@@ -26,6 +26,16 @@ abstract interface class BeatDetectionRepository {
     bool forceReanalyze = false,
   });
 
+  /// Re-tracks beats on [analysis] with [options] in a background isolate
+  /// (§4.2), caching the result per `(projectId, options)` in memory so
+  /// toggling back to an already-visited option set is instant.
+  Future<BeatAnalysis> retrack(
+    String projectId,
+    BeatAnalysis analysis,
+    TrackingOptions options, {
+    AnalysisCancelToken? cancelToken,
+  });
+
   /// Runs fast (< 5 ms) classification on [analysis] for [sensitivity] (`0..1`).
   DetectionResult classify(BeatAnalysis analysis, double sensitivity);
 }
@@ -36,9 +46,13 @@ class BeatDetectionRepositoryImpl implements BeatDetectionRepository {
   final Future<ProjectPaths> Function() _paths;
   final ProjectRepository? _projectRepository;
 
-  /// In-memory cache of the most recent analyses by projectId so slider drags
+  /// In-memory cache of the base analysis by projectId so slider drags
   /// in the Auto-detect sheet don't even touch disk once loaded.
   final Map<String, BeatAnalysis> _memoryCache = {};
+
+  /// In-memory cache of re-track results keyed by `(projectId, TrackingOptions)`
+  /// so toggling between Auto / ½× / 2× / candidates / steady / varying is instant (§4.2).
+  final Map<(String, TrackingOptions), BeatAnalysis> _retrackCache = {};
 
   @override
   Future<BeatAnalysis?> getCachedAnalysis(String projectId) async {
@@ -56,12 +70,14 @@ class BeatDetectionRepositoryImpl implements BeatDetectionRepository {
         final decoded = decodeBeatAnalysis(bytes);
         await tmpFile.rename(file.path);
         _memoryCache[projectId] = decoded;
+        _retrackCache[(projectId, const TrackingOptions())] = decoded;
         return decoded;
       }
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         final decoded = decodeBeatAnalysis(bytes);
         _memoryCache[projectId] = decoded;
+        _retrackCache[(projectId, const TrackingOptions())] = decoded;
         return decoded;
       }
     } catch (e) {
@@ -107,6 +123,8 @@ class BeatDetectionRepositoryImpl implements BeatDetectionRepository {
     }
 
     _memoryCache[projectId] = analysis;
+    _retrackCache.removeWhere((key, _) => key.$1 == projectId);
+    _retrackCache[(projectId, const TrackingOptions())] = analysis;
 
     // Persist atomically through the serialized writer if project dir still exists.
     try {
@@ -129,6 +147,47 @@ class BeatDetectionRepositoryImpl implements BeatDetectionRepository {
     }
 
     return analysis;
+  }
+
+  @override
+  Future<BeatAnalysis> retrack(
+    String projectId,
+    BeatAnalysis analysis,
+    TrackingOptions options, {
+    AnalysisCancelToken? cancelToken,
+  }) async {
+    if (cancelToken != null && cancelToken.isCancelled) {
+      throw const AnalysisCancelledException();
+    }
+
+    final cacheKey = (projectId, options);
+    final cached = _retrackCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    // Use the base analysis from _memoryCache if available so re-tracking
+    // always starts from the original winning tempoCandidates.
+    final baseAnalysis = _memoryCache[projectId] ?? analysis;
+    final paths = await _paths();
+    if (cancelToken != null && cancelToken.isCancelled) {
+      throw const AnalysisCancelledException();
+    }
+    final wavPath = paths.songWav(projectId);
+
+    final updated = await runRetrackInIsolate(
+      wavPath,
+      baseAnalysis,
+      options,
+      cancelToken: cancelToken,
+    );
+
+    if (cancelToken != null && cancelToken.isCancelled) {
+      throw const AnalysisCancelledException();
+    }
+
+    _retrackCache[cacheKey] = updated;
+    return updated;
   }
 
   @override
