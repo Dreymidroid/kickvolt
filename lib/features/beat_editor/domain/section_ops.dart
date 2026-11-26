@@ -16,8 +16,10 @@ bool areSectionsValid(List<Section> sections, int sampleCount) {
   return true;
 }
 
-/// Splits the section containing [playheadSample], snapping the new boundary
-/// to the nearest beat in [beats] (if any).
+/// Splits the section containing [playheadSample]. The new boundary snaps to
+/// the nearest beat strictly inside that section; with no beat inside it,
+/// the split is at the playhead. (Snapping to a beat outside the section
+/// would split a neighbour, or jump far away across a stretch with no beats.)
 ///
 /// If [sections] is empty, first creates one section covering `[0, sampleCount)`
 /// named "Song" and splits it if the boundary falls strictly inside `(0, sampleCount)`.
@@ -43,9 +45,19 @@ List<Section>? splitSectionAt({
     ];
   }
 
-  var splitAt = playheadSample.clamp(0, sampleCount - 1);
-  if (beats.isNotEmpty) {
-    splitAt = _nearestBeatSample(beats, splitAt);
+  final playhead = playheadSample.clamp(0, sampleCount - 1);
+  final containing = base.indexWhere(
+    (s) => playhead >= s.startSample && playhead < s.endSample,
+  );
+  var splitAt = playhead;
+  if (containing >= 0) {
+    final inside = [
+      for (final b in beats)
+        if (b.sample > base[containing].startSample &&
+            b.sample < base[containing].endSample)
+          b,
+    ];
+    if (inside.isNotEmpty) splitAt = _nearestBeatSample(inside, playhead);
   }
 
   final idx = base.indexWhere(

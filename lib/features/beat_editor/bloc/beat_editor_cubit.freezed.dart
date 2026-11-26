@@ -129,7 +129,7 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading() when loading != null:
 return loading();case BeatEditorReady() when ready != null:
@@ -152,7 +152,7 @@ return error(_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)  ready,required TResult Function( String error)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)  ready,required TResult Function( String error)  error,}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading():
 return loading();case BeatEditorReady():
@@ -171,7 +171,7 @@ return error(_that.error);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( Project project,  PeakPyramid peaks,  bool snap,  bool clicks,  bool updatingClicks,  double speed,  bool playing,  bool playbackUnavailable,  EditorTool tool,  int? selectedIndex,  bool canUndo,  bool canRedo,  List<Beat> tapRunBeats,  int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  OutputKind outputKind,  int? bulkRangeStart,  int? bulkRangeEnd,  int bulkShiftMs,  EditorSheet activeSheet,  bool analyzing,  double analysisProgress,  double previewSensitivity,  BeatFilter previewFilter,  List<Beat>? previewBeats,  double? previewBpm,  List<Section>? previewSections,  bool previewSucceeded,  String? saveError,  String? infoMessage)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
 switch (_that) {
 case BeatEditorLoading() when loading != null:
 return loading();case BeatEditorReady() when ready != null:
@@ -226,7 +226,7 @@ String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
 
 
 class BeatEditorReady extends BeatEditorState with DiagnosticableTreeMixin {
-  const BeatEditorReady({required this.project, required this.peaks, this.snap = true, this.clicks = false, this.updatingClicks = false, this.speed = 1.0, this.playing = false, this.playbackUnavailable = false, this.tool = EditorTool.edit, this.selectedIndex, this.canUndo = false, this.canRedo = false,  List<Beat> tapRunBeats = const <Beat>[], this.latencyOffsetMs = 0, this.latencyCalibratedOn = OutputKind.unknown, this.outputKind = OutputKind.unknown, this.bulkRangeStart, this.bulkRangeEnd, this.bulkShiftMs = 0, this.activeSheet = EditorSheet.none, this.analyzing = false, this.analysisProgress = 0.0, this.previewSensitivity = 0.5, this.previewFilter = BeatFilter.every,  List<Beat>? previewBeats, this.previewBpm,  List<Section>? previewSections, this.previewSucceeded = true, this.saveError, this.infoMessage}): _tapRunBeats = tapRunBeats,_previewBeats = previewBeats,_previewSections = previewSections,super._();
+  const BeatEditorReady({required this.project, required this.peaks, this.snap = true, this.clicks = false, this.updatingClicks = false, this.speed = 1.0, this.playing = false, this.playbackUnavailable = false, this.tool = EditorTool.edit, this.selectedIndex, this.canUndo = false, this.canRedo = false,  List<Beat> tapRunBeats = const <Beat>[], this.latencyOffsetMs = 0, this.latencyCalibratedOn, this.outputKind = OutputKind.unknown, this.bulkRangeStart, this.bulkRangeEnd, this.bulkShiftMs = 0, this.activeSheet = EditorSheet.none, this.analyzing = false, this.analysisProgress = 0.0, this.previewSensitivity = 0.5, this.previewFilter = BeatFilter.every,  List<Beat>? previewBeats, this.previewBpm,  List<Section>? previewSections, this.previewSucceeded = true, this.saveError, this.infoMessage}): _tapRunBeats = tapRunBeats,_previewBeats = previewBeats,_previewSections = previewSections,super._();
   
 
  final  Project project;
@@ -261,7 +261,7 @@ class BeatEditorReady extends BeatEditorState with DiagnosticableTreeMixin {
 /// calibrated, otherwise iOS reported output latency rounded to ms, else 0).
 @JsonKey() final  int latencyOffsetMs;
 /// Output route on which the stored latency offset was calibrated.
-@JsonKey() final  OutputKind latencyCalibratedOn;
+ final  OutputKind? latencyCalibratedOn;
 /// Current audio output route reported by `OutputRouteService`.
 @JsonKey() final  OutputKind outputKind;
 /// Bulk-tab selection range in sample frames (live UI state, not in stack).
@@ -351,7 +351,7 @@ abstract mixin class $BeatEditorReadyCopyWith<$Res> implements $BeatEditorStateC
   factory $BeatEditorReadyCopyWith(BeatEditorReady value, $Res Function(BeatEditorReady) _then) = _$BeatEditorReadyCopyWithImpl;
 @useResult
 $Res call({
- Project project, PeakPyramid peaks, bool snap, bool clicks, bool updatingClicks, double speed, bool playing, bool playbackUnavailable, EditorTool tool, int? selectedIndex, bool canUndo, bool canRedo, List<Beat> tapRunBeats, int latencyOffsetMs, OutputKind latencyCalibratedOn, OutputKind outputKind, int? bulkRangeStart, int? bulkRangeEnd, int bulkShiftMs, EditorSheet activeSheet, bool analyzing, double analysisProgress, double previewSensitivity, BeatFilter previewFilter, List<Beat>? previewBeats, double? previewBpm, List<Section>? previewSections, bool previewSucceeded, String? saveError, String? infoMessage
+ Project project, PeakPyramid peaks, bool snap, bool clicks, bool updatingClicks, double speed, bool playing, bool playbackUnavailable, EditorTool tool, int? selectedIndex, bool canUndo, bool canRedo, List<Beat> tapRunBeats, int latencyOffsetMs, OutputKind? latencyCalibratedOn, OutputKind outputKind, int? bulkRangeStart, int? bulkRangeEnd, int bulkShiftMs, EditorSheet activeSheet, bool analyzing, double analysisProgress, double previewSensitivity, BeatFilter previewFilter, List<Beat>? previewBeats, double? previewBpm, List<Section>? previewSections, bool previewSucceeded, String? saveError, String? infoMessage
 });
 
 
@@ -368,7 +368,7 @@ class _$BeatEditorReadyCopyWithImpl<$Res>
 
 /// Create a copy of BeatEditorState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? peaks = null,Object? snap = null,Object? clicks = null,Object? updatingClicks = null,Object? speed = null,Object? playing = null,Object? playbackUnavailable = null,Object? tool = null,Object? selectedIndex = freezed,Object? canUndo = null,Object? canRedo = null,Object? tapRunBeats = null,Object? latencyOffsetMs = null,Object? latencyCalibratedOn = null,Object? outputKind = null,Object? bulkRangeStart = freezed,Object? bulkRangeEnd = freezed,Object? bulkShiftMs = null,Object? activeSheet = null,Object? analyzing = null,Object? analysisProgress = null,Object? previewSensitivity = null,Object? previewFilter = null,Object? previewBeats = freezed,Object? previewBpm = freezed,Object? previewSections = freezed,Object? previewSucceeded = null,Object? saveError = freezed,Object? infoMessage = freezed,}) {
+@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? peaks = null,Object? snap = null,Object? clicks = null,Object? updatingClicks = null,Object? speed = null,Object? playing = null,Object? playbackUnavailable = null,Object? tool = null,Object? selectedIndex = freezed,Object? canUndo = null,Object? canRedo = null,Object? tapRunBeats = null,Object? latencyOffsetMs = null,Object? latencyCalibratedOn = freezed,Object? outputKind = null,Object? bulkRangeStart = freezed,Object? bulkRangeEnd = freezed,Object? bulkShiftMs = null,Object? activeSheet = null,Object? analyzing = null,Object? analysisProgress = null,Object? previewSensitivity = null,Object? previewFilter = null,Object? previewBeats = freezed,Object? previewBpm = freezed,Object? previewSections = freezed,Object? previewSucceeded = null,Object? saveError = freezed,Object? infoMessage = freezed,}) {
   return _then(BeatEditorReady(
 project: null == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
 as Project,peaks: null == peaks ? _self.peaks : peaks // ignore: cast_nullable_to_non_nullable
@@ -384,8 +384,8 @@ as int?,canUndo: null == canUndo ? _self.canUndo : canUndo // ignore: cast_nulla
 as bool,canRedo: null == canRedo ? _self.canRedo : canRedo // ignore: cast_nullable_to_non_nullable
 as bool,tapRunBeats: null == tapRunBeats ? _self._tapRunBeats : tapRunBeats // ignore: cast_nullable_to_non_nullable
 as List<Beat>,latencyOffsetMs: null == latencyOffsetMs ? _self.latencyOffsetMs : latencyOffsetMs // ignore: cast_nullable_to_non_nullable
-as int,latencyCalibratedOn: null == latencyCalibratedOn ? _self.latencyCalibratedOn : latencyCalibratedOn // ignore: cast_nullable_to_non_nullable
-as OutputKind,outputKind: null == outputKind ? _self.outputKind : outputKind // ignore: cast_nullable_to_non_nullable
+as int,latencyCalibratedOn: freezed == latencyCalibratedOn ? _self.latencyCalibratedOn : latencyCalibratedOn // ignore: cast_nullable_to_non_nullable
+as OutputKind?,outputKind: null == outputKind ? _self.outputKind : outputKind // ignore: cast_nullable_to_non_nullable
 as OutputKind,bulkRangeStart: freezed == bulkRangeStart ? _self.bulkRangeStart : bulkRangeStart // ignore: cast_nullable_to_non_nullable
 as int?,bulkRangeEnd: freezed == bulkRangeEnd ? _self.bulkRangeEnd : bulkRangeEnd // ignore: cast_nullable_to_non_nullable
 as int?,bulkShiftMs: null == bulkShiftMs ? _self.bulkShiftMs : bulkShiftMs // ignore: cast_nullable_to_non_nullable

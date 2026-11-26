@@ -123,7 +123,7 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind calibratedOn,  int? reportedOutputLatencyMs,  bool saved)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind? calibratedOn,  int? reportedOutputLatencyMs,  bool saved)?  ready,TResult Function( String error)?  error,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case LatencyCalibrationLoading() when loading != null:
 return loading();case LatencyCalibrationReady() when ready != null:
@@ -146,7 +146,7 @@ return error(_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind calibratedOn,  int? reportedOutputLatencyMs,  bool saved)  ready,required TResult Function( String error)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind? calibratedOn,  int? reportedOutputLatencyMs,  bool saved)  ready,required TResult Function( String error)  error,}) {final _that = this;
 switch (_that) {
 case LatencyCalibrationLoading():
 return loading();case LatencyCalibrationReady():
@@ -165,7 +165,7 @@ return error(_that.error);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind calibratedOn,  int? reportedOutputLatencyMs,  bool saved)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( bool playing,  bool playbackUnavailable,  int validTapCount,  int requiredTaps,  CalibrationStatus status,  int? measuredOffsetMs,  OutputKind outputKind,  OutputKind? calibratedOn,  int? reportedOutputLatencyMs,  bool saved)?  ready,TResult? Function( String error)?  error,}) {final _that = this;
 switch (_that) {
 case LatencyCalibrationLoading() when loading != null:
 return loading();case LatencyCalibrationReady() when ready != null:
@@ -214,7 +214,7 @@ String toString() {
 
 
 class LatencyCalibrationReady extends LatencyCalibrationState {
-  const LatencyCalibrationReady({this.playing = false, this.playbackUnavailable = false, this.validTapCount = 0, this.requiredTaps = kCalibrationMinTaps, this.status = CalibrationStatus.needMoreTaps, this.measuredOffsetMs, this.outputKind = OutputKind.unknown, this.calibratedOn = OutputKind.unknown, this.reportedOutputLatencyMs, this.saved = false}): super._();
+  const LatencyCalibrationReady({this.playing = false, this.playbackUnavailable = false, this.validTapCount = 0, this.requiredTaps = kCalibrationMinTaps, this.status = CalibrationStatus.needMoreTaps, this.measuredOffsetMs, this.outputKind = OutputKind.unknown, this.calibratedOn, this.reportedOutputLatencyMs, this.saved = false}): super._();
   
 
 @JsonKey() final  bool playing;
@@ -224,7 +224,7 @@ class LatencyCalibrationReady extends LatencyCalibrationState {
 @JsonKey() final  CalibrationStatus status;
  final  int? measuredOffsetMs;
 @JsonKey() final  OutputKind outputKind;
-@JsonKey() final  OutputKind calibratedOn;
+ final  OutputKind? calibratedOn;
  final  int? reportedOutputLatencyMs;
 @JsonKey() final  bool saved;
 
@@ -260,7 +260,7 @@ abstract mixin class $LatencyCalibrationReadyCopyWith<$Res> implements $LatencyC
   factory $LatencyCalibrationReadyCopyWith(LatencyCalibrationReady value, $Res Function(LatencyCalibrationReady) _then) = _$LatencyCalibrationReadyCopyWithImpl;
 @useResult
 $Res call({
- bool playing, bool playbackUnavailable, int validTapCount, int requiredTaps, CalibrationStatus status, int? measuredOffsetMs, OutputKind outputKind, OutputKind calibratedOn, int? reportedOutputLatencyMs, bool saved
+ bool playing, bool playbackUnavailable, int validTapCount, int requiredTaps, CalibrationStatus status, int? measuredOffsetMs, OutputKind outputKind, OutputKind? calibratedOn, int? reportedOutputLatencyMs, bool saved
 });
 
 
@@ -277,7 +277,7 @@ class _$LatencyCalibrationReadyCopyWithImpl<$Res>
 
 /// Create a copy of LatencyCalibrationState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? playing = null,Object? playbackUnavailable = null,Object? validTapCount = null,Object? requiredTaps = null,Object? status = null,Object? measuredOffsetMs = freezed,Object? outputKind = null,Object? calibratedOn = null,Object? reportedOutputLatencyMs = freezed,Object? saved = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? playing = null,Object? playbackUnavailable = null,Object? validTapCount = null,Object? requiredTaps = null,Object? status = null,Object? measuredOffsetMs = freezed,Object? outputKind = null,Object? calibratedOn = freezed,Object? reportedOutputLatencyMs = freezed,Object? saved = null,}) {
   return _then(LatencyCalibrationReady(
 playing: null == playing ? _self.playing : playing // ignore: cast_nullable_to_non_nullable
 as bool,playbackUnavailable: null == playbackUnavailable ? _self.playbackUnavailable : playbackUnavailable // ignore: cast_nullable_to_non_nullable
@@ -286,8 +286,8 @@ as int,requiredTaps: null == requiredTaps ? _self.requiredTaps : requiredTaps //
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as CalibrationStatus,measuredOffsetMs: freezed == measuredOffsetMs ? _self.measuredOffsetMs : measuredOffsetMs // ignore: cast_nullable_to_non_nullable
 as int?,outputKind: null == outputKind ? _self.outputKind : outputKind // ignore: cast_nullable_to_non_nullable
-as OutputKind,calibratedOn: null == calibratedOn ? _self.calibratedOn : calibratedOn // ignore: cast_nullable_to_non_nullable
-as OutputKind,reportedOutputLatencyMs: freezed == reportedOutputLatencyMs ? _self.reportedOutputLatencyMs : reportedOutputLatencyMs // ignore: cast_nullable_to_non_nullable
+as OutputKind,calibratedOn: freezed == calibratedOn ? _self.calibratedOn : calibratedOn // ignore: cast_nullable_to_non_nullable
+as OutputKind?,reportedOutputLatencyMs: freezed == reportedOutputLatencyMs ? _self.reportedOutputLatencyMs : reportedOutputLatencyMs // ignore: cast_nullable_to_non_nullable
 as int?,saved: null == saved ? _self.saved : saved // ignore: cast_nullable_to_non_nullable
 as bool,
   ));

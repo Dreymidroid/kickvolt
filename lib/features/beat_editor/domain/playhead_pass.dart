@@ -14,12 +14,16 @@ enum BeatPassHaptic { light, heavy }
 /// - `BeatType.drop` fires [BeatPassHaptic.heavy] whenever playing.
 /// - `BeatType.strong` and `BeatType.downbeat` fire [BeatPassHaptic.light]
 ///   only when [clicksEnabled] is true.
+///
+/// Pass [visibleIndices] (`visibleBeatIndices(project)`, cached by the caller)
+/// when calling this every frame, so the filter isn't recomputed per frame.
 List<BeatPassHaptic> detectPassedBeatHaptics({
   required Project project,
   required int previousSample,
   required int currentSample,
   required bool playing,
   required bool clicksEnabled,
+  List<int>? visibleIndices,
 }) {
   if (!playing || currentSample <= previousSample) {
     return const <BeatPassHaptic>[];
@@ -29,7 +33,7 @@ List<BeatPassHaptic> detectPassedBeatHaptics({
     return const <BeatPassHaptic>[];
   }
 
-  final visible = visibleBeatIndices(project);
+  final visible = visibleIndices ?? visibleBeatIndices(project);
   if (visible.isEmpty) return const <BeatPassHaptic>[];
 
   final out = <BeatPassHaptic>[];

@@ -178,6 +178,25 @@ void main() {
       expect(ready(c2).latencyOffsetMs, 42);
       await c2.close();
     });
+
+    test('a calibration saved on an unknown route still wins over the iOS-reported latency', () async {
+      outputRoute.latency = const Duration(milliseconds: 28);
+      final c = BeatEditorCubit(
+        repository: repo,
+        playback: player,
+        settingsRepository: FakeSettingsRepository(
+          const AppSettings(
+            latencyOffsetMs: 150,
+            latencyCalibratedOn: OutputKind.unknown,
+          ),
+        ),
+        outputRouteService: outputRoute,
+        haptics: haptics,
+      );
+      await c.load('demo');
+      expect(ready(c).latencyOffsetMs, 150);
+      await c.close();
+    });
   });
 
   group('Bulk tab operations', () {

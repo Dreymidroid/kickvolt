@@ -48,7 +48,7 @@ sealed class BeatEditorState with _$BeatEditorState {
     @Default(0) int latencyOffsetMs,
 
     /// Output route on which the stored latency offset was calibrated.
-    @Default(OutputKind.unknown) OutputKind latencyCalibratedOn,
+    OutputKind? latencyCalibratedOn,
 
     /// Current audio output route reported by `OutputRouteService`.
     @Default(OutputKind.unknown) OutputKind outputKind,

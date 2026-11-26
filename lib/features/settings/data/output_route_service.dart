@@ -134,11 +134,11 @@ String outputKindLabel(OutputKind kind) => switch (kind) {
 /// Whether the Bluetooth mismatch warning should be shown (§7.3, §7.6).
 ///
 /// Shown when the current output is Bluetooth and calibration was NOT done on
-/// Bluetooth, or when calibration WAS done on Bluetooth and the current output
-/// is not Bluetooth (and known).
+/// Bluetooth (including never calibrated), or when calibration WAS done on
+/// Bluetooth and the current output is not Bluetooth (and known).
 bool shouldShowBluetoothWarning({
   required OutputKind currentOutput,
-  required OutputKind calibratedOn,
+  required OutputKind? calibratedOn,
 }) {
   if (currentOutput == OutputKind.bluetooth) {
     return calibratedOn != OutputKind.bluetooth;

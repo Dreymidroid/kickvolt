@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 
 import '../../../core/audio_math/click_synth.dart';
@@ -29,9 +30,15 @@ class ClickPreviewCancelToken {
 /// Runs [renderPreviewMix] in a background isolate with cooperative
 /// cancellation (matching M4's `runAnalysisInIsolate` pattern).
 ///
-/// Signals the worker to stop between chunks so its `finally` block closes
-/// both file handles and deletes the `.part` file before exiting; falls back
-/// to `Isolate.immediate` kill only after a 2-second grace period.
+/// Cancelling asks the worker to stop between chunks, so its `finally` block
+/// closes both file handles and deletes the `.part` file before it exits; the
+/// isolate is only hard-killed after a 2-second grace period. A cancel that
+/// arrives while the isolate is still being spawned waits for the spawn and
+/// then stops the worker the same way, so no orphan render keeps running (and
+/// keeps files open, which blocks folder deletion on Windows).
+///
+/// When [ClickPreviewCancelToken.cancel] completes, the worker has exited (or
+/// been killed) and its files are closed.
 Future<PreviewMixStats> runPreviewMixInIsolate({
   required String songWavPath,
   required String outputWavPath,
@@ -47,96 +54,108 @@ Future<PreviewMixStats> runPreviewMixInIsolate({
 
   final receivePort = ReceivePort();
   final exitPort = ReceivePort();
-  final exitCompleter = Completer<void>();
+  final exited = Completer<void>();
+  final workerReady = Completer<SendPort>();
+  final spawned = Completer<Isolate?>();
   final completer = Completer<PreviewMixStats>();
-  Isolate? isolate;
-  SendPort? workerCancelPort;
-  var finished = false;
+  Future<void>? shutdown;
 
   exitPort.listen((_) {
-    exitPort.close();
-    if (!exitCompleter.isCompleted) {
-      exitCompleter.complete();
-    }
+    if (!exited.isCompleted) exited.complete();
   });
 
-  Future<void> cleanUp({bool isCancel = false}) async {
-    if (!finished) {
-      finished = true;
+  void closePorts() {
+    receivePort.close();
+    exitPort.close();
+  }
+
+  /// Stops the worker (cooperatively when [cancel] is true) and releases the
+  /// ports. Runs at most once.
+  Future<void> stopWorker({required bool cancel}) {
+    return shutdown ??= () async {
       cancelToken?._onCancel = null;
-      final iso = isolate;
-      isolate = null;
+      final iso = await spawned.future;
       if (iso != null) {
-        if (isCancel && workerCancelPort != null) {
-          workerCancelPort!.send(true);
-          await exitCompleter.future.timeout(
+        if (cancel) {
+          // The worker sends its cancel port first thing; wait for it (or
+          // for the worker to have exited already).
+          await Future.any<Object?>([workerReady.future, exited.future])
+              .timeout(const Duration(seconds: 2), onTimeout: () => null);
+          if (workerReady.isCompleted && !exited.isCompleted) {
+            (await workerReady.future).send(true);
+          }
+          await exited.future.timeout(
             const Duration(seconds: 2),
-            onTimeout: () {
-              iso.kill(priority: Isolate.immediate);
-            },
+            onTimeout: () => iso.kill(priority: Isolate.immediate),
           );
-        } else {
-          iso.kill(priority: Isolate.immediate);
         }
-        await exitCompleter.future.timeout(
+        // After done/error the worker exits by itself; wait briefly.
+        await exited.future.timeout(
           const Duration(milliseconds: 300),
           onTimeout: () {},
         );
-      } else {
-        exitPort.close();
       }
-      receivePort.close();
-    } else if (isCancel) {
-      await exitCompleter.future.timeout(
-        const Duration(milliseconds: 300),
-        onTimeout: () {},
-      );
-    }
+      closePorts();
+    }();
   }
 
+  var cancelling = false;
+  var finishedWhileCancelling = false;
   cancelToken?._onCancel = () async {
-    await cleanUp(isCancel: true);
+    cancelling = true;
+    await stopWorker(cancel: true);
+    if (finishedWhileCancelling) {
+      // The worker renamed the finished file just before it saw the cancel.
+      try {
+        await File(outputWavPath).delete();
+      } catch (_) {}
+    }
+    // Settle only once the worker is gone, so callers can delete the folder.
     if (!completer.isCompleted) {
       completer.completeError(const ClickPreviewCancelledException());
     }
   };
 
   receivePort.listen((Object? message) {
-    if (message is List<Object?>) {
-      final tag = message[0];
-      if (tag == 'init') {
-        workerCancelPort = message[1] as SendPort;
-        if (cancelToken != null && cancelToken.isCancelled) {
-          workerCancelPort?.send(true);
-        }
-        return;
+    if (message is! List<Object?> || message.isEmpty) return;
+    final tag = message[0];
+    if (tag == 'init') {
+      if (!workerReady.isCompleted) {
+        workerReady.complete(message[1] as SendPort);
       }
-      if (finished || completer.isCompleted) return;
-      if (tag == 'progress') {
-        onProgress?.call((message[1] as num).toDouble().clamp(0.0, 1.0));
-      } else if (tag == 'done') {
-        final stats = PreviewMixStats(
+      return;
+    }
+    if (cancelling && tag == 'done') finishedWhileCancelling = true;
+    if (completer.isCompleted || cancelling) return;
+    if (tag == 'progress') {
+      onProgress?.call((message[1] as num).toDouble().clamp(0.0, 1.0));
+    } else if (tag == 'done') {
+      completer.complete(
+        PreviewMixStats(
           sampleRate: message[1] as int,
           channels: message[2] as int,
           frameCount: message[3] as int,
           peakBufferBytes: message[4] as int,
-        );
-        unawaited(cleanUp());
-        completer.complete(stats);
-      } else if (tag == 'error') {
-        final err = message[1] as String;
-        unawaited(cleanUp());
-        if (err.contains('PreviewMixCancelledException')) {
-          completer.completeError(const ClickPreviewCancelledException());
-        } else {
-          completer.completeError(StateError(err));
-        }
-      }
+        ),
+      );
+      unawaited(stopWorker(cancel: false));
+    } else if (tag == 'error') {
+      final err = message[1] as String;
+      completer.completeError(
+        err.contains('PreviewMixCancelledException')
+            ? const ClickPreviewCancelledException()
+            : StateError(err),
+      );
+      unawaited(stopWorker(cancel: false));
+    } else {
+      // Uncaught error forwarded by `onError`: [error, stackTrace] strings.
+      completer.completeError(StateError(message.join(' ')));
+      unawaited(stopWorker(cancel: true));
     }
   });
 
   try {
-    isolate = await Isolate.spawn<_PreviewIsolateRequest>(
+    final iso = await Isolate.spawn<_PreviewIsolateRequest>(
       _previewIsolateEntry,
       _PreviewIsolateRequest(
         songWavPath: songWavPath,
@@ -149,17 +168,12 @@ Future<PreviewMixStats> runPreviewMixInIsolate({
       onError: receivePort.sendPort,
       onExit: exitPort.sendPort,
     );
-    if (cancelToken != null && cancelToken.isCancelled) {
-      await cleanUp(isCancel: true);
-      if (!completer.isCompleted) {
-        completer.completeError(const ClickPreviewCancelledException());
-      }
-    }
+    spawned.complete(iso);
   } catch (e, st) {
-    await cleanUp();
-    if (!completer.isCompleted) {
-      completer.completeError(e, st);
-    }
+    spawned.complete(null);
+    cancelToken?._onCancel = null;
+    closePorts();
+    if (!completer.isCompleted) completer.completeError(e, st);
   }
 
   return completer.future;

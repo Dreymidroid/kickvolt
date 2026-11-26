@@ -14,7 +14,7 @@ sealed class LatencyCalibrationState with _$LatencyCalibrationState {
     @Default(CalibrationStatus.needMoreTaps) CalibrationStatus status,
     int? measuredOffsetMs,
     @Default(OutputKind.unknown) OutputKind outputKind,
-    @Default(OutputKind.unknown) OutputKind calibratedOn,
+    OutputKind? calibratedOn,
     int? reportedOutputLatencyMs,
     @Default(false) bool saved,
   }) = LatencyCalibrationReady;

@@ -11,7 +11,7 @@ void main() {
       final repo = SettingsRepositoryImpl();
       final s = await repo.load();
       expect(s.latencyOffsetMs, 0);
-      expect(s.latencyCalibratedOn, OutputKind.unknown);
+      expect(s.latencyCalibratedOn, isNull);
       expect(s.hapticsEnabled, isTrue);
       expect(repo.current, s);
     });
@@ -47,6 +47,28 @@ void main() {
       );
       expect(savedLow.latencyOffsetMs, -100);
       expect(repo.current.latencyOffsetMs, -100);
+    });
+
+    test('a calibration on an unknown route is kept as calibrated', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsRepositoryImpl().save(
+        const AppSettings(
+          latencyOffsetMs: 120,
+          latencyCalibratedOn: OutputKind.unknown,
+        ),
+      );
+      final loaded = await SettingsRepositoryImpl().load();
+      expect(loaded.latencyCalibratedOn, OutputKind.unknown);
+      expect(loaded.latencyOffsetMs, 120);
+
+      // Clearing the calibration removes the key again.
+      await SettingsRepositoryImpl().save(
+        loaded.copyWith(latencyCalibratedOn: null),
+      );
+      expect(
+        (await SettingsRepositoryImpl().load()).latencyCalibratedOn,
+        isNull,
+      );
     });
   });
 }

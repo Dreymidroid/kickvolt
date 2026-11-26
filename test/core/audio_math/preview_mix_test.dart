@@ -218,4 +218,39 @@ void main() {
     await projDir.delete(recursive: true);
     expect(await projDir.exists(), isFalse);
   });
+
+  test('cancel while the isolate is still spawning stops the worker and frees '
+      'the folder', () async {
+    final projDir = Directory('${tempDir.path}${Platform.pathSeparator}early');
+    await projDir.create(recursive: true);
+    final songPath = '${projDir.path}${Platform.pathSeparator}song.wav';
+    await _writeFadedSongWav(
+      path: songPath,
+      sampleRate: 44100,
+      channels: 2,
+      frameCount: 44100 * 20,
+    );
+
+    // Cancel at different moments: synchronously (during spawn), after a
+    // microtask, and after the event queue has turned.
+    for (var i = 0; i < 9; i++) {
+      final token = ClickPreviewCancelToken();
+      final out = '${projDir.path}${Platform.pathSeparator}preview-$i.wav';
+      final future = runPreviewMixInIsolate(
+        songWavPath: songPath,
+        outputWavPath: out,
+        beatSamples: [for (var b = 0; b < 40; b++) b * 22050],
+        cancelToken: token,
+      );
+      if (i % 3 == 1) await Future<void>.value();
+      if (i % 3 == 2) await pumpEventQueue();
+      await token.cancel();
+      await expectLater(future, throwsA(isA<ClickPreviewCancelledException>()));
+      expect(await File(out).exists(), isFalse, reason: 'case $i');
+      expect(await File('$out.part').exists(), isFalse, reason: 'case $i');
+    }
+
+    await projDir.delete(recursive: true);
+    expect(await projDir.exists(), isFalse);
+  });
 }

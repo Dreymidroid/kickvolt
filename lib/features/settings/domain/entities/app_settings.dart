@@ -17,9 +17,10 @@ abstract class AppSettings with _$AppSettings {
     /// Tap-to-mark latency compensation in ms, clamped to `[-100, 500]`.
     @Default(0) int latencyOffsetMs,
 
-    /// Output route on which [latencyOffsetMs] was calibrated.
-    /// [OutputKind.unknown] means not yet calibrated.
-    @Default(OutputKind.unknown) OutputKind latencyCalibratedOn,
+    /// Output route on which [latencyOffsetMs] was calibrated, or null if the
+    /// user hasn't calibrated yet. [OutputKind.unknown] is a real calibration
+    /// on a route we couldn't classify (e.g. Android BLE-audio headphones).
+    OutputKind? latencyCalibratedOn,
 
     /// Global haptics switch (§6.2).
     @Default(true) bool hapticsEnabled,

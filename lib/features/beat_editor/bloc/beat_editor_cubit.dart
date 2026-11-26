@@ -119,6 +119,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   String? _songPath;
   String? _activePreviewPath;
   Timer? _previewDebounceTimer;
+
+  /// Visible beats for playback haptics, cached per [Project] instance.
+  Project? _hapticsProject;
+  List<int> _hapticsVisible = const [];
   ClickPreviewCancelToken? _previewCancelToken;
 
   StreamSubscription<OutputKind>? _routeSub;
@@ -276,7 +280,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   }
 
   /// Resolves the effective latency offset (§6.3):
-  /// - Once calibrated (`latencyCalibratedOn != OutputKind.unknown`), use the
+  /// - Once calibrated (`latencyCalibratedOn != null`), use the
   ///   calibrated value directly (do NOT add platform latency on top).
   /// - Before calibration, use iOS reported output latency rounded to ms if
   ///   available, else 0.
@@ -284,7 +288,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     required AppSettings settings,
     required Duration? reportedOutputLatency,
   }) {
-    if (settings.latencyCalibratedOn != OutputKind.unknown) {
+    if (settings.latencyCalibratedOn != null) {
       return settings.latencyOffsetMs;
     }
     if (reportedOutputLatency != null) {
@@ -331,12 +335,20 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     _lastPlayheadSample = curr;
     if (s == null || isClosed) return;
 
+    if (!s.playing) return;
+    // Recompute the filtered beat list only when the project changes, not on
+    // every display frame.
+    if (!identical(_hapticsProject, s.project)) {
+      _hapticsProject = s.project;
+      _hapticsVisible = visibleBeatIndices(s.project);
+    }
     final haptics = detectPassedBeatHaptics(
       project: s.project,
       previousSample: prev,
       currentSample: curr,
       playing: s.playing,
       clicksEnabled: s.clicks,
+      visibleIndices: _hapticsVisible,
     );
     for (final h in haptics) {
       switch (h) {

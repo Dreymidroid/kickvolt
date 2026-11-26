@@ -44,10 +44,9 @@ class SettingsRepositoryImpl implements SettingsRepository {
       kLatencyOffsetMaxMs,
     );
     final rawKind = prefs.getString(LATENCY_CALIBRATED_ON);
-    final kind = OutputKind.values.firstWhere(
-      (k) => k.name == rawKind,
-      orElse: () => OutputKind.unknown,
-    );
+    final kind = rawKind == null
+        ? null
+        : OutputKind.values.where((k) => k.name == rawKind).firstOrNull;
     final haptics = prefs.getBool(HAPTICS_ENABLED) ?? true;
 
     _current = AppSettings(
@@ -68,10 +67,12 @@ class SettingsRepositoryImpl implements SettingsRepository {
     );
     final prefs = await _prefsProvider();
     await prefs.setInt(LATENCY_OFFSET_MS, clamped.latencyOffsetMs);
-    await prefs.setString(
-      LATENCY_CALIBRATED_ON,
-      clamped.latencyCalibratedOn.name,
-    );
+    final calibratedOn = clamped.latencyCalibratedOn;
+    if (calibratedOn == null) {
+      await prefs.remove(LATENCY_CALIBRATED_ON);
+    } else {
+      await prefs.setString(LATENCY_CALIBRATED_ON, calibratedOn.name);
+    }
     await prefs.setBool(HAPTICS_ENABLED, clamped.hapticsEnabled);
     _current = clamped;
     return clamped;
