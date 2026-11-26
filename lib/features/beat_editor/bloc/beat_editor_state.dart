@@ -76,6 +76,31 @@ sealed class BeatEditorState with _$BeatEditorState {
     /// Draft filter in the Auto-detect sheet.
     @Default(BeatFilter.every) BeatFilter previewFilter,
 
+    /// Draft tempo mode in the Auto-detect sheet (`steady` or `varying`, §6).
+    @Default(TempoMode.steady) TempoMode previewTempoMode,
+
+    /// Draft tempo override BPM in the Auto-detect sheet (`null` = Auto, §6).
+    double? previewTempoOverrideBpm,
+
+    /// True while a tempo choice or mode change is re-tracking in the isolate (§6).
+    @Default(false) bool retracking,
+
+    /// Base (Auto) BPM from the cached [BeatAnalysis], used by the Tempo row chips.
+    double? analysisAutoBpm,
+
+    /// Distinct tempo candidates (40–240 BPM) from the cached [BeatAnalysis].
+    @Default(<TempoCandidate>[]) List<TempoCandidate> previewTempoCandidates,
+
+    /// Whether the cached analysis suggests varying tempo (`tempoStability` > threshold).
+    @Default(false) bool suggestsTempoChanges,
+
+    /// Estimated swing ratio & confidence from the active analysis.
+    @Default(SwingEstimate()) SwingEstimate previewSwing,
+
+    /// Whether the "no steady beat" failure occurred with low global confidence
+    /// but decent local periodicity so "Try Tempo changes" should be offered (§6).
+    @Default(false) bool canTryTempoChangesOnFailure,
+
     /// Live preview beats shown on the waveform while Auto-detect sheet is open.
     /// Null when not previewing (painter uses `project.beats`).
     List<Beat>? previewBeats,

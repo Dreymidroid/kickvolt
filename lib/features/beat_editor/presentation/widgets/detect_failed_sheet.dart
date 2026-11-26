@@ -7,12 +7,15 @@ import '../../bloc/beat_editor_cubit.dart';
 /// Bottom sheet shown when no steady beat could be found
 /// (`EditorDetectFailed.png` / `EditorDetectFailed.html`).
 class DetectFailedSheet extends StatelessWidget {
-  const DetectFailedSheet({super.key});
+  const DetectFailedSheet({super.key, this.state});
+
+  final BeatEditorReady? state;
 
   @override
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
+    final showTryTempoChanges = state?.canTryTempoChangesOnFailure ?? false;
 
     return Container(
       decoration: BoxDecoration(
@@ -85,6 +88,15 @@ class DetectFailedSheet extends StatelessWidget {
                 highlighted: true,
                 onTap: cubit.tapBeatsFromFailedSheet,
               ),
+              if (showTryTempoChanges) ...[
+                const SizedBox(height: 10),
+                _ActionCard(
+                  icon: KvIcons.sliders,
+                  title: 'Try Tempo changes',
+                  subtitle: 'Follows a drifting or shifting tempo',
+                  onTap: cubit.tryTempoChangesFromFailedSheet,
+                ),
+              ],
               const SizedBox(height: 10),
               _ActionCard(
                 icon: KvIcons.sparkle,

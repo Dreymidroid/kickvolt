@@ -22,9 +22,13 @@ class EditorTopBar extends StatelessWidget {
     final p = state.project;
     final visibleCount = visibleBeatIndices(p).length;
     final hasBeats = visibleCount > 0;
+    final bpmText = p.bpm == null
+        ? '– BPM'
+        : p.tempoVaries
+        ? '~${_formatBpm(p.bpm!)} BPM, varies'
+        : '${_formatBpm(p.bpm!)} BPM';
     final subtitle = hasBeats
-        ? '$visibleCount ${visibleCount == 1 ? 'beat' : 'beats'} · '
-              '${p.bpm == null ? '– BPM' : '${_formatBpm(p.bpm!)} BPM'}'
+        ? '$visibleCount ${visibleCount == 1 ? 'beat' : 'beats'} · $bpmText'
         : '${formatClock(p.durationMs)} · no beats yet';
 
     return SizedBox(

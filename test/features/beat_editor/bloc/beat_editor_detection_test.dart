@@ -38,7 +38,44 @@ void main() {
     ],
     frameLowEnergy: Float32List(10),
     frameOverallEnergy: Float32List(10),
+    tempoCandidates: const [
+      TempoCandidate(bpm: 120.0, periodFrames: 43.066, score: 1.0),
+      TempoCandidate(bpm: 60.0, periodFrames: 86.132, score: 0.7),
+      TempoCandidate(bpm: 240.0, periodFrames: 21.533, score: 0.5),
+      TempoCandidate(bpm: 90.0, periodFrames: 57.422, score: 0.4),
+    ],
+    localTempo: Float32List.fromList([41.0, 43.0, 45.0]),
+    tempoStability: 0.035,
+    swing: const SwingEstimate(ratio: 0.66, confidence: 0.85),
   );
+
+  final retrackedAnalysis240 = BeatAnalysis(
+    sampleRate: 44100,
+    sampleCount: 44100 * 60,
+    hopSize: 512,
+    bpm: 240.0,
+    confidence: 3.5,
+    beatPhaseSample: 250,
+    candidates: const [
+      CandidateBeat(index: 0, sample: 250, strength: 0.9, lowEnergy: 5.0),
+      CandidateBeat(index: 1, sample: 11275, strength: 0.6, lowEnergy: 2.0),
+      CandidateBeat(index: 2, sample: 22300, strength: 0.8, lowEnergy: 3.0),
+      CandidateBeat(index: 3, sample: 33325, strength: 0.5, lowEnergy: 1.0),
+    ],
+    frameLowEnergy: Float32List(10),
+    frameOverallEnergy: Float32List(10),
+    tempoCandidates: analysis.tempoCandidates,
+    localTempo: analysis.localTempo,
+    tempoStability: analysis.tempoStability,
+    swing: analysis.swing,
+  );
+
+  const retrackedBeats240 = <Beat>[
+    Beat(sample: 250, type: BeatType.downbeat),
+    Beat(sample: 11275, type: BeatType.beat),
+    Beat(sample: 22300, type: BeatType.strong),
+    Beat(sample: 33325, type: BeatType.beat),
+  ];
 
   const detectedBeats = <Beat>[
     Beat(sample: 500, type: BeatType.downbeat),
@@ -59,6 +96,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(FakeBeatAnalysis());
     registerFallbackValue(AnalysisCancelToken());
+    registerFallbackValue(const TrackingOptions());
   });
 
   setUp(() {
@@ -66,13 +104,30 @@ void main() {
     detectionRepo = MockBeatDetectionRepository();
     when(() => detectionRepo.getCachedAnalysis(any()))
         .thenAnswer((_) async => analysis);
+    when(
+      () => detectionRepo.retrack(
+        any(),
+        any(),
+        any(),
+        cancelToken: any(named: 'cancelToken'),
+      ),
+    ).thenAnswer((inv) async {
+      final opts = inv.positionalArguments[2] as TrackingOptions;
+      if (opts.targetBpm == null && opts.tempoMode == TempoMode.steady) {
+        return analysis;
+      }
+      return retrackedAnalysis240.copyWithBpm(opts.targetBpm ?? 122.0);
+    });
     when(() => detectionRepo.classify(any(), any())).thenAnswer((inv) {
+      final a = inv.positionalArguments[0] as BeatAnalysis;
       final sens = inv.positionalArguments[1] as double;
+      final isRetracked = a.bpm != 120.0;
+      final baseBeats = isRetracked ? retrackedBeats240 : detectedBeats;
       return DetectionResult(
         succeeded: true,
-        beats: sens >= 0.5 ? detectedBeats : detectedBeats.sublist(0, 3),
-        bpm: 120.0,
-        beatPhaseSample: 500,
+        beats: sens >= 0.5 ? baseBeats : baseBeats.sublist(0, 3),
+        bpm: a.bpm,
+        beatPhaseSample: a.beatPhaseSample,
         sections: detectedSections,
       );
     });
@@ -343,4 +398,98 @@ void main() {
       },
     );
   });
+
+  group(
+    'M4b Tempo choice, varying mode, Snap disable, and cancel on sheet close',
+    () {
+      test('tempo chip triggers re-track, updates preview, Detect commits, and one undo restores beats, bpm, phase, sections, tempoMode and tempoOverrideBpm', () async {
+        final c = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          detectionRepository: detectionRepo,
+          saveDebounce: Duration.zero,
+        );
+        await c.load('demo');
+        final originalProject = ready(c).project;
+        expect(ready(c).snap, isTrue);
+
+        await c.openAutoDetectSheet();
+        expect(ready(c).previewTempoOverrideBpm, isNull);
+        expect(ready(c).previewTempoMode, TempoMode.steady);
+
+        // Select 2x tempo (240 BPM) -> re-tracks and updates preview.
+        await c.setPreviewTempoOverride(240.0);
+        expect(ready(c).previewTempoOverrideBpm, 240.0);
+        expect(ready(c).previewBpm, 240.0);
+        expect(ready(c).previewBeats, retrackedBeats240);
+
+        // Switch to Tempo changes (varying mode) -> re-tracks.
+        await c.setPreviewTempoMode(TempoMode.varying);
+        expect(ready(c).previewTempoMode, TempoMode.varying);
+
+        // Commit -> replaces everything and disables Snap in varying mode.
+        c.commitAutoDetect();
+        final committed = ready(c);
+        expect(committed.activeSheet, EditorSheet.none);
+        expect(committed.project.beats, retrackedBeats240);
+        expect(committed.project.bpm, 240.0);
+        expect(committed.project.beatPhaseSample, 250);
+        expect(committed.project.detection.tempoMode, TempoMode.varying);
+        expect(committed.project.detection.tempoOverrideBpm, 240.0);
+        expect(committed.project.tempoVaries, isTrue);
+        expect(committed.snap, isFalse);
+
+        // Toggling Snap in varying mode stays disabled and shows hint message.
+        c.toggleSnap();
+        expect(ready(c).snap, isFalse);
+        expect(ready(c).infoMessage, 'Snap needs a steady tempo');
+
+        // One undo restores previous beats, bpm, phase, sections, and detection settings (tempoMode & tempoOverrideBpm).
+        c.undo();
+        expect(ready(c).project, originalProject);
+        expect(ready(c).project.detection.tempoMode, TempoMode.steady);
+        expect(ready(c).project.detection.tempoOverrideBpm, isNull);
+        await c.close();
+      });
+
+      test('closing the sheet cancels an in-flight re-track', () async {
+        final retrackCompleter = Completer<BeatAnalysis>();
+        AnalysisCancelToken? capturedToken;
+        when(
+          () => detectionRepo.retrack(
+            any(),
+            any(),
+            any(),
+            cancelToken: any(named: 'cancelToken'),
+          ),
+        ).thenAnswer((inv) {
+          capturedToken =
+              inv.namedArguments[#cancelToken] as AnalysisCancelToken?;
+          return retrackCompleter.future;
+        });
+
+        final c = BeatEditorCubit(
+          playback: FakeAudioPlayback(),
+          repository: repo,
+          detectionRepository: detectionRepo,
+        );
+        await c.load('demo');
+        await c.openAutoDetectSheet();
+
+        final retrackFuture = c.setPreviewTempoOverride(240.0);
+        await Future<void>.microtask(() {});
+        expect(ready(c).retracking, isTrue);
+
+        // Close sheet while re-track is in flight -> cancels token and clears retracking state.
+        c.closeSheet();
+        expect(capturedToken?.isCancelled, isTrue);
+        expect(ready(c).activeSheet, EditorSheet.none);
+        expect(ready(c).retracking, isFalse);
+
+        retrackCompleter.completeError(const AnalysisCancelledException());
+        await retrackFuture;
+        await c.close();
+      });
+    },
+  );
 }
