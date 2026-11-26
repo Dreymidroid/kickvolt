@@ -78,6 +78,37 @@ class FakeAudioNative implements AudioNative {
 
   @override
   Future<LibraryTrack?> pickFromMusicLibrary() async => null;
+
+  @override
+  Future<MediaInfo> encodeM4a({
+    required String jobId,
+    required String wavPath,
+    required String outPath,
+    int bitrate = kDefaultM4aBitrate,
+    void Function(double fraction)? onProgress,
+  }) async => MediaInfo(
+    sampleRate: sampleRate,
+    channels: channels,
+    durationUs: frames * 1000000 ~/ sampleRate,
+    frameCount: frames,
+  );
+
+  @override
+  Future<MediaInfo> probeMedia(String path) async => MediaInfo(
+    sampleRate: sampleRate,
+    channels: channels,
+    durationUs: frames * 1000000 ~/ sampleRate,
+    frameCount: frames,
+  );
+
+  @override
+  Future<int> saveToFiles(List<String> paths) async => paths.length;
+
+  @override
+  Future<int> beginBackgroundWork(String name) async => 0;
+
+  @override
+  Future<void> endBackgroundWork(int token) async {}
 }
 
 void main() {

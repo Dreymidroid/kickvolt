@@ -26,7 +26,9 @@ enum ImportFailureKind {
         AudioErrorKind.decodeFailed => unsupported,
         AudioErrorKind.diskFull => diskFull,
         AudioErrorKind.permissionDenied => permissionDenied,
-        AudioErrorKind.cancelled || AudioErrorKind.unknown => unknown,
+        AudioErrorKind.cancelled ||
+        AudioErrorKind.encodeFailed ||
+        AudioErrorKind.unknown => unknown,
       };
 }
 

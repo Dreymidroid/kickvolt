@@ -10,6 +10,7 @@ final class AudioHostApiImpl: AudioHostApi {
   private let jobsLock = NSLock()
   private var jobs: [String: CancelFlag] = [:]
   private var pickerDelegate: MusicPickerDelegate?
+  private var documentExportDelegate: DocumentExportDelegate?
 
   init(messenger: FlutterBinaryMessenger) {
     progressApi = AudioProgressApi(binaryMessenger: messenger)
@@ -108,6 +109,79 @@ final class AudioHostApiImpl: AudioHostApi {
 
   func freeDiskBytes(path: String) throws -> Int64 {
     WavDecoder.freeBytes(at: URL(fileURLWithPath: path))
+  }
+
+  // MARK: M6 Export (M4A, Probe, Save to Files, Background Task)
+
+  func encodeM4a(jobId: String, wavPath: String, outPath: String, bitrate: Int64) async throws
+    -> MediaInfo
+  {
+    let flag = CancelFlag()
+    setJob(jobId, flag)
+    defer { setJob(jobId, nil) }
+
+    let wavURL = URL(fileURLWithPath: wavPath)
+    let outURL = URL(fileURLWithPath: outPath)
+    let progressApi = self.progressApi
+
+    return try await M4aEncoder.encode(
+      wavURL: wavURL,
+      outURL: outURL,
+      bitrate: Int(bitrate),
+      cancel: flag
+    ) { fraction in
+      DispatchQueue.main.async {
+        Task { @MainActor in
+          try? await progressApi.onProgress(jobId: jobId, fraction: fraction)
+        }
+      }
+    }
+  }
+
+  func probeMedia(path: String) async throws -> MediaInfo {
+    try await M4aEncoder.probeMedia(url: URL(fileURLWithPath: path))
+  }
+
+  func saveToFiles(paths: [String]) async throws -> Int64 {
+    let urls = paths.map { URL(fileURLWithPath: $0) }.filter {
+      FileManager.default.fileExists(atPath: $0.path)
+    }
+    if urls.isEmpty { return 0 }
+
+    return await withCheckedContinuation { continuation in
+      DispatchQueue.main.async {
+        guard let presenter = Self.topViewController() else {
+          continuation.resume(returning: 0)
+          return
+        }
+        let picker = UIDocumentPickerViewController(forExporting: urls, asCopy: true)
+        let delegate = DocumentExportDelegate { [weak self] savedCount in
+          self?.documentExportDelegate = nil
+          continuation.resume(returning: savedCount)
+        }
+        self.documentExportDelegate = delegate
+        picker.delegate = delegate
+        presenter.present(picker, animated: true)
+      }
+    }
+  }
+
+  func beginBackgroundWork(name: String) throws -> Int64 {
+    var taskId: UIBackgroundTaskIdentifier = .invalid
+    taskId = UIApplication.shared.beginBackgroundTask(withName: name) {
+      if taskId != .invalid {
+        UIApplication.shared.endBackgroundTask(taskId)
+        taskId = .invalid
+      }
+    }
+    return Int64(taskId.rawValue)
+  }
+
+  func endBackgroundWork(token: Int64) throws {
+    let id = UIBackgroundTaskIdentifier(rawValue: Int(token))
+    if id != .invalid {
+      UIApplication.shared.endBackgroundTask(id)
+    }
   }
 
   private static func topViewController() -> UIViewController? {
