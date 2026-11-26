@@ -12,7 +12,7 @@ Two parts:
   template you fill in.
 
 Do Part A's integration tests after M6 is merged (they need export); add
-the M7/M8 flows when those land. Part B can start as soon as a build
+the M4b/M7/M8 flows when those land. Part B can start as soon as a build
 installs on a phone — **the first device run is also the first time M1's
 native decoders run at all.**
 
@@ -25,11 +25,10 @@ native decoders run at all.**
 | P1 | **Fix the local Android build.** Delete `%USERPROFILE%\.gradle\wrapper\dists\gradle-9.3.1-all\9ot9r568e8zfvvd4mn8rbu1j0\gradle-9.3.1-all.zip` and the `.lck` next to it (or the whole `gradle-9.3.1-all` folder), then run `flutter build apk --debug` once on a good connection. | The zip is truncated (~150 MB of ~220 MB), so every Android build fails. Nothing Android has ever compiled locally. |
 | P2 | **Run Codemagic once.** Connect the GitHub repo, start the existing `ci` workflow on `main`. | `codemagic.yaml` exists but has never run. It's the only place iOS compiles. Expect Swift/Kotlin compile errors on the first run (M1's decoders have never been built). |
 | P3 | **iOS device installs need signing.** Options: (a) an Apple Developer account ($99/yr) + Codemagic automatic signing + TestFlight; (b) a Mac with Xcode and your Apple ID (free provisioning, 7-day apps). From Windows only (a) works. | The CI build is `--no-codesign`, which can't be installed on a phone. |
-| P4 | **Android release signing.** Release builds still use the debug key (`android/app/build.gradle.kts`). Fine for sideloading test builds; a Play upload (needed for purchase testing, M8) needs an upload key. | Play internal testing, license testers. |
+| P4 | **Android release signing.** Release builds still use the debug key (`android/app/build.gradle.kts`). Fine for sideloading test builds; a Play upload needs an upload key. | Play internal testing (and, once payments exist, license testers). |
 | P5 | **An Android device** with USB debugging on, or an emulator (Android Studio › Device Manager, API 24 and 34 images). | Local integration tests and manual cases. |
 | P6 | **Test songs** you own (not DRM): MP3, M4A/AAC, WAV, one per genre in B3, a 10-minute track, and a short video with audio. Put them on each phone (Files / Downloads). | Manual cases. Never commit them. |
 | P7 | CapCut and VN installed on the test phones, latest versions; note their versions in the results. | The product goal (B5). |
-| P8 | For M8: RevenueCat project, store products, sandbox testers / license testers (see `docs/revenuecat-setup.md`, written in M8). | Purchase cases. |
 
 ---
 
@@ -71,7 +70,9 @@ flutter test
 | M5 Editor | Fill any gaps found when M5 is verified | Tap timing, latency, Bluetooth routes, click preview by ear |
 | M6 Export | (M6 brief lists them) | **M4A encode**, Save to Files, share sheet, backgrounding |
 | M7 Video | (M7 brief) | **H.264 encode**, flash frames visible in editors |
-| M8 | (M8 brief) | Purchases, restore, permissions, first run |
+| M4b | (M4b brief) | Tempo choice and tempo-changes mode on real songs |
+| M8 | (M8 brief) | Permissions, first run |
+| Payments (later) | — | Purchases, restore, quota |
 
 The last column is the reason for A3: the native half of the app (decode,
 encode, save, permissions) has no automated test at all.
@@ -96,7 +97,6 @@ encode, save, permissions) has no automated test at all.
     detection, editor, export, native encode.
   - `ShareService` → a recorder (the system share sheet can't be driven).
   - `saveToFiles` → recorder (the native folder picker can't be driven).
-  - `PurchasesClient` (M8) → fake.
   - `Haptics` → recorder.
 - **Fixtures** (`integration_test/fixtures/`): short (8–10 s) audio files
   made once with ffmpeg from a synthetic WAV (120 BPM, kick + hat clicks
@@ -130,7 +130,7 @@ Each flow starts from a clean app documents directory.
 | I9 | Cancel export | Pack folder gone; a new export succeeds |
 | I10 | Guide video (needs M7) | `probeMedia`: H.264, 30 fps, duration within 1 frame of the song, has audio; audio decodes to the guide track's frame count |
 | I11 | First run (needs M8) | Fresh install shows onboarding; Skip → Home; second launch → Home; coach marks once |
-| I12 | Quota (needs M8, fake purchases + injected clock) | 30 exports allowed, 31st shows the paywall prompt; fake `pro` → unlimited |
+| I12 | Advanced detection (needs M4b) | Import a 174 BPM fixture; Auto-detect sheet › 2× → beats on the 174 grid; Tempo changes on a ramp fixture → beats within ±10 ms |
 | I13 | Delete project | Folder gone; Home empty state |
 
 Disk-full, DRM and cloud items can't be produced reliably on CI; they
@@ -283,6 +283,10 @@ beat?" Yes/Mostly/No.
 | B3.7 | Tempo change / live recording | Note drift |
 | B3.8 | Very loud master and a very quiet track | Same quality (detection is loudness-independent) |
 | B3.9 | Filter: every / strong / drops / every 2nd / every 4th | Marker counts change; data unchanged when switching back |
+| B3.10 *(M4b)* | Drum-and-bass (B3.4) › Auto-detect › **2×** | Reads ≈ 174; a marker on every beat; Detect → one undo restores 87 |
+| B3.11 *(M4b)* | Half-time hip-hop › ½× and 2× | Both choices give on-beat markers at the chosen grid |
+| B3.12 *(M4b)* | Live recording / DJ edit / sped-up edit with a tempo change | Sheet suggests "Tempo changes"; with it on, markers stay on the beat to the end (zoom in at the end); Snap is disabled with its hint |
+| B3.13 *(M4b)* | Shuffle / swing track (blues, swing house, some hip-hop) | BPM is the beat tempo (not ×1.5); no markers on the off-beats |
 
 ### B4. Editing, tap-to-mark, latency, click preview (M5)
 
@@ -356,7 +360,7 @@ Expected:
 | B6.10 | Export 4 times from one project | Only the last 3 packs kept (app storage doesn't keep growing) |
 | B6.11 | Guide video (M7) on D2 and D4 | Encodes (or the clear fallback/error); note time for a 3-min song |
 
-### B7. Onboarding, settings, paywall (M8)
+### B7. Onboarding and settings (M8); payments later
 
 | ID | Steps | Expected |
 |---|---|---|
@@ -365,20 +369,21 @@ Expected:
 | B7.3 | Coach marks on first editor open | 3 steps; Skip tips; don't return |
 | B7.4 | How-to screens | CapCut and VN tabs; copy matches what you saw in B5 |
 | B7.5 | Settings: change every default; kill and reopen | Persisted; next export uses them; no Theme row |
-| B7.6 | Sandbox purchase (iOS sandbox tester; Android license tester via Play internal track) monthly and yearly | Prices from the store; purchase completes; Pro features unlock immediately; chip hidden/PRO |
-| B7.7 | Cancel the purchase sheet | No error; still free |
-| B7.8 | Restore purchases on a second device / after reinstall | Pro restored |
-| B7.9 | Free tier: export 30 packs (or set N to 3 in a debug build) | 31st blocked with the reset date and Go Pro |
-| B7.10 | Rollover: after 7 days (sandbox: change the device date forward 7 days, then back) | Exports available again exactly 7 days after the first; moving the clock back doesn't give extra exports |
-| B7.11 | Airplane mode with and without Pro | App works; Pro remains (cached); free quota still counted |
-| B7.12 | Subscription expiry (sandbox renewals are minutes long) | Pro ends on expiry; free tier resumes |
+| B7.5b | Look for any "PRO", "free left" or upgrade prompt on Home, Export, Settings, onboarding | None (no payments yet) |
+| B7.6 *(when payments exist)* | Sandbox purchase (iOS sandbox tester; Android license tester via Play internal track) monthly and yearly | Prices from the store; purchase completes; Pro features unlock immediately; chip hidden/PRO |
+| B7.7 *(payments)* | Cancel the purchase sheet | No error; still free |
+| B7.8 *(payments)* | Restore purchases on a second device / after reinstall | Pro restored |
+| B7.9 *(payments)* | Free tier: export 30 packs (or set N to 3 in a debug build) | 31st blocked with the reset date and Go Pro |
+| B7.10 *(payments)* | Rollover: after 7 days (sandbox: change the device date forward 7 days, then back) | Exports available again exactly 7 days after the first; moving the clock back doesn't give extra exports |
+| B7.11 *(payments)* | Airplane mode with and without Pro | App works; Pro remains (cached); free quota still counted |
+| B7.12 *(payments)* | Subscription expiry (sandbox renewals are minutes long) | Pro ends on expiry; free tier resumes |
 
 ### B8. Accessibility and robustness
 
 | ID | Steps | Expected |
 |---|---|---|
 | B8.1 | VoiceOver (iOS) / TalkBack (Android) through Home → import → editor → export | Every button has a label; you can export a pack without seeing the screen (the waveform itself may be limited — note what isn't reachable) |
-| B8.2 | Largest text size / display size | No clipped or overlapping text on Home, Export, Settings, Paywall, onboarding |
+| B8.2 | Largest text size / display size | No clipped or overlapping text on Home, Export, Settings, onboarding |
 | B8.3 | Haptics off (app setting) and system haptics off | No vibration |
 | B8.4 | Rotate the phone | Stays portrait or lays out correctly |
 | B8.5 | Split screen / Slide Over (iPad, Android multi-window) | No crash |

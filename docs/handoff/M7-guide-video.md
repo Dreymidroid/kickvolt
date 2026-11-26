@@ -69,7 +69,8 @@ against §10 happens afterwards, in a separate session.
 ## 2. Context
 
 KickVolt exports a **beat pack** (song + click guide track, optional
-preview mix) for CapCut/VN; M6 built that. M7 adds the Pro **guide video**:
+preview mix) for CapCut/VN; M6 built that. M7 adds the **guide video** (free for now; the design marks it Pro, but
+there are no payments yet and no "Pro" label is shown):
 a black clip, exactly as long as the song, that flashes white and shows the
 beat number on every beat, with the guide track as its audio. The user
 drops it on the timeline at 0:00 and cuts to the flashes by eye, or runs
@@ -81,7 +82,8 @@ Done so far: M1–M6 (see `PLAN.md` §9). Relevant pieces:
   (`AudioHostApiImpl.kt` with coroutines, `AudioHostApiImpl.swift`).
 - `ExportRepository` / `planBeatPack` / `ExportCubit` (M6) — the job
   pipeline, `.part` + rename, disk checks, failure kinds.
-- `EntitlementService` (M6 stub: everything allowed; M8: RevenueCat).
+- `EntitlementService` (M6 stub: everything allowed; a later payments
+  milestone replaces it).
   Guide video is gated by `hasGuideVideo`.
 
 **Core rule:** the beat → frame mapping is computed **in Dart** from integer
@@ -230,9 +232,9 @@ codec, muxer and EGL in `finally`; delete the output on failure.
 ## 6. Export integration
 
 - Export screen: the Guide video row becomes a toggle when
-  `hasGuideVideo` is true (always, with the M6 stub). When false (M8 free
-  tier), tapping it opens the paywall route if it exists, else shows "Pro
-  feature" (M8 wires the paywall; keep it behind one callback).
+  `hasGuideVideo` is true (always, with the M6 stub). When false (only
+  after payments exist), the row is disabled and calls one `onLocked`
+  callback that does nothing today. No PRO badge, no paywall.
 - `ExportOptions.includeVideo`; `planBeatPack` adds `<Title>_guide.mp4`
   after the guide track (the video needs the guide WAV; if the pack format
   is M4A, render the guide WAV first, encode the video from it, then
@@ -261,7 +263,7 @@ back where a file is produced.
 |---|---|
 | `guide_video_plan_test.dart` | `totalFrames` for 44.1/48/22.05 kHz and odd lengths (exact integer maths, incl. `frameCount` an exact multiple of a frame and one sample over); beat → frame at boundaries (a beat on the last sample of frame k → k; first sample of k+1 → k+1); first/last sample beats; two beats in one frame → one flash with the later number; filter respected; numbers 1-based and parallel; empty beat list → black video of the right length. Property test on a seeded RNG: every flash frame's time span contains its beat. |
 | `export_repository_test.dart` (extend) | With a fake `AudioNative`: video included only when asked and entitled; spec passed to `encodeGuideVideo` equals `planGuideVideo` output and points at the rendered guide WAV; M4A pack order (guide WAV → video → guide M4A → WAV deleted); `encode_failed` → failure with "export without video"; cancel cancels the native job and removes the pack folder. |
-| `export_cubit_test.dart` (extend) | Toggle allowed with `hasGuideVideo`; blocked path calls the "Pro" callback; retry without video. |
+| `export_cubit_test.dart` (extend) | Toggle allowed with `hasGuideVideo`; with a fake service returning false the row is disabled and calls `onLocked`; retry without video. |
 | Widget tests | Export screen video row on/off/locked; ExportSuccess lists the MP4. |
 | Pigeon | Generated file formatted; new error copy mapped. |
 
@@ -271,7 +273,8 @@ integration test should assert.
 
 ## 9. Out of scope (do not build)
 
-- Paywall, RevenueCat, real entitlement checks (M8).
+- Paywall, RevenueCat, real entitlement checks, PRO labels (later
+  payments milestone).
 - Landscape/square sizes, colours or fonts the user can choose.
 - Video preview playback inside the app.
 - Any package (no `ffmpeg_kit`, no video plugins).

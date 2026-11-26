@@ -80,7 +80,9 @@ in `PLAN.md` §9):
 M6 adds the Export flow: options screen, a streaming export job in an
 isolate with progress and cancel, native M4A encoding, failure handling
 (disk full, interrupted), the success screen with share / Save to Files,
-and a stub `EntitlementService` that M8 replaces with RevenueCat.
+and a stub `EntitlementService` (everything allowed) that a later payments
+milestone replaces. **No payments, limits or "Pro" labels are visible
+anywhere for now** (decided 2026-11-26).
 
 **Core rule:** every exported audio file has the **same sample rate and
 frame count** as `song.wav`, read back from the file. Clicks start at the
@@ -123,7 +125,7 @@ Names below are as on `main` after the M5 merge (2026-11-26).
 | `lib/core/audio_native/audio_native_client.dart` | Dart wrapper (`AudioNative` interface, `AudioNativeException(kind)`). Extend it; tests use a fake. |
 | `android/app/src/main/kotlin/com/kickvolt/app/audio/` | `AudioHostApiImpl.kt`, `WavDecoder.kt` (coroutines, job map, cancel). Add `M4aEncoder.kt`, `FileSaver.kt`. |
 | `ios/Runner/Audio/` | `AudioHostApiImpl.swift`, `WavDecoder.swift`. Add `M4aEncoder.swift`, `FileSaver.swift` **and register them in `ios/Runner.xcodeproj/project.pbxproj` by hand** (copy how M1 added the `Audio` group's files: a `PBXFileReference`, a `PBXBuildFile`, an entry in the group and in the Runner target's Sources phase, each with a new unique 24-hex id). A Swift file missing from the project doesn't compile into the app and Codemagic won't tell you why the symbol is missing. |
-| `lib/app/app_constants.dart` | `AppConstants.freeExportsPerWeek = 30` (used in M8; the stub ignores it). |
+| `lib/app/app_constants.dart` | `AppConstants.freeExportsPerWeek = 30` (for the later payments milestone; the stub ignores it). |
 | `test/fixtures/` | `synthetic_audio.dart` / `synthetic_music.dart` (WAV writers with faded notes), `demo_project.dart`, `editor_fakes.dart`. |
 
 ## 4. Export pipeline (pure Dart)
@@ -397,7 +399,8 @@ export only. The Settings screen that edits them is M8.
 
 `lib/core/entitlements/entitlement_service.dart` — the **one** place any
 code asks "is this allowed?". No other code checks Pro status or counts
-exports. Interface (keep these names; M8 implements them for real):
+exports. Interface (keep these names; the payments milestone implements
+them for real):
 
 ```dart
 abstract interface class EntitlementService {
@@ -415,7 +418,7 @@ M6 ships `UnlimitedEntitlementService` (everything allowed, quota
 unlimited, `recordExport` no-op), registered in the locator. The Export
 flow calls `canExport()` before starting and `recordExport()` after
 success. With an unlimited quota the caption under the Export button is
-hidden; when M8 returns a finite quota it shows "Uses 1 of your 30 free
+hidden (always, for now); if a later service returns a finite quota it shows "Uses 1 of your 30 free
 exports this week" (keep the widget ready and test both).
 
 ## 7. UI
@@ -428,7 +431,7 @@ editor's pending save first, so the export sees the latest beats).
 - Header: title, "358 beats · 128 BPM · 2:48" — **beats = visible beats**
   (that's what gets exported).
 - "In the pack": Song (always on), Guide track (always on), Guide video
-  (PRO badge; disabled with "Coming soon" until M7 — no paywall in M6),
+  (disabled with "Coming soon" until M7; **no PRO badge**),
   Preview mix (toggle).
 - Click sound: Snap / Rim / Blip / Kick (`KvSegmented`). Tapping one plays
   a one-shot preview of that click (render with `renderClick` into a tiny
@@ -489,15 +492,16 @@ disk, not from in-memory buffers.
 | `guide_track_test.dart` | Song fixtures: 44.1 kHz stereo, 48 kHz mono, an odd length (e.g. 1 s + 1 frame), 22.05 kHz. **"Song and guide track have identical sample counts"**: frame count and rate of the guide read back from the file == `song.wav`'s, for stereo and mono guides. For every visible beat: the first non-zero sample at or after `beat − 1` is exactly `beat`; samples between clicks are exactly 0; peak of an isolated click within −3 dBFS ±0.1 dB; filter respected (hidden beats → silence there); beats at 0 and `frameCount − 1`; beats beyond the end clamped; overlapping clicks summed and clipped; same click on both channels; all four styles; chunk boundary straddling a click (a beat 3 samples before a chunk end). Peak buffer ≤ 4 MB for a 10-minute song (compute from chunk sizes; don't render 10 minutes if slow — say how you measured). |
 | `beat_pack_plan_test.dart` | File names and sanitising (unicode, emoji/surrogates, reserved chars, empty, very long, dots); one format for the whole pack; preview included only when asked; estimate of bytes. |
 | `export_repository_test.dart` | With a fake `AudioNative`: WAV pack → song file is byte-identical to `song.wav`; guide/preview as above; M4A pack calls `encodeM4a` for each file and deletes intermediate WAVs; cancel mid-render **and** cancel immediately after start (isolate still spawning) → pack folder gone, no `.part`, folder deletable, repeated 30× without a leak; ENOSPC (simulate with a writer that throws `FileSystemException(osError: OSError('', 28))`) → `diskFull`; pre-check with `freeDiskBytes` too low → `diskFull` before any file is written; native `encode_failed` → `encodeFailed`; `cleanUpStaleParts` removes stale packs and keeps finished ones; only the last 3 packs kept. |
-| `export_cubit_test.dart` | Options from settings defaults; plan updates on option change; export → progress → done, `recordExport` called once, `successNotification` fired; each failure → `failed` with the right kind; retry and "switch format and retry"; `canExport() == false` → never starts (M8 path, with a fake service); cancel. |
+| `export_cubit_test.dart` | Options from settings defaults; plan updates on option change; export → progress → done, `recordExport` called once, `successNotification` fired; each failure → `failed` with the right kind; retry and "switch format and retry"; `canExport() == false` → never starts (future payments path, with a fake service); cancel. |
 | `entitlement_service_test.dart` | The stub: unlimited quota, `canExport` true, `recordExport` harmless. |
 | Widget tests (`test/features/export/presentation/`) | Export screen: chips, M4A warning appears/disappears, file list names, disabled with 0 beats, quota caption shown for a finite quota and hidden for unlimited; Exporting: progress and Cancel; ExportFailed: copy and buttons per failure; ExportSuccess: Share calls the fake `ShareService` with all paths, Save to Files calls `saveToFiles`. |
 | Pigeon round-trip | The generated Dart file is formatted; `AudioNativeClient` maps the new error codes (`encode_failed`, plus existing ones) to typed exceptions. |
 
 ## 9. Out of scope (do not build)
 
-- Guide video (M7). The PRO row is shown disabled.
-- Paywall, real export counting, RevenueCat (M8). Only the stub service.
+- Guide video (M7). The row is shown disabled ("Coming soon").
+- Paywall, export counting, RevenueCat, any "Pro" label (later payments
+  milestone). Only the stub service.
 - Settings screen, onboarding, how-to screens (M8).
 - Opening CapCut/VN; `url_launcher`.
 - A foreground service or any long-running background mode.
@@ -560,4 +564,4 @@ Behaviour:
    design `_guide`, how-to link before M8, click audition, anything else).
 8. What you could not compile, run or verify — say explicitly that the
    Swift and Kotlin code is uncompiled and nothing ran on a device.
-9. Anything noticed for M7/M8.
+9. Anything noticed for M7/M8/M4b.
