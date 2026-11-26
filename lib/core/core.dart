@@ -1,9 +1,11 @@
 export 'audio_math/click_synth.dart';
+export 'audio_math/guide_track.dart';
 export 'audio_math/overview.dart';
 export 'audio_math/pcm_window_loader.dart';
 export 'audio_math/peaks.dart';
 export 'audio_math/preview_mix.dart';
 export 'audio_math/wav_header.dart';
+export 'audio_math/wav_writer.dart';
 export 'audio_native/audio_native_client.dart';
 export 'di/locator.dart';
 export 'haptics/haptics.dart';

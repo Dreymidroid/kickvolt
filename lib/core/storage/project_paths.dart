@@ -41,6 +41,13 @@ class ProjectPaths {
 
   String projectJson(String id) => p.join(projectDir(id), 'project.json');
 
+  /// Directory containing exported beat packs (`projects/<id>/exports/`).
+  String exportsDir(String id) => p.join(projectDir(id), 'exports');
+
+  /// Directory for a single beat pack (`projects/<id>/exports/<stamp>/`).
+  String exportPackDir(String id, String stamp) =>
+      p.join(exportsDir(id), stamp);
+
   Future<Directory> createProjectDir(String id) =>
       Directory(projectDir(id)).create(recursive: true);
 
