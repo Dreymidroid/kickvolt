@@ -1201,7 +1201,7 @@ as int,
 /// @nodoc
 mixin _$DetectionSettingsModel {
 
- double get sensitivity; BeatFilter get filter; DetectionStatus get status;
+ double get sensitivity; BeatFilter get filter; DetectionStatus get status; TempoMode get tempoMode; double? get tempoOverrideBpm;
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1215,20 +1215,20 @@ $DetectionSettingsModelCopyWith<DetectionSettingsModel> get copyWith => _$Detect
 @override
 bool operator ==(Object other) {
   final _this = this as DetectionSettingsModel;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectionSettingsModel&&(identical(other.sensitivity, _this.sensitivity) || other.sensitivity == _this.sensitivity)&&(identical(other.filter, _this.filter) || other.filter == _this.filter)&&(identical(other.status, _this.status) || other.status == _this.status));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectionSettingsModel&&(identical(other.sensitivity, _this.sensitivity) || other.sensitivity == _this.sensitivity)&&(identical(other.filter, _this.filter) || other.filter == _this.filter)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.tempoMode, _this.tempoMode) || other.tempoMode == _this.tempoMode)&&(identical(other.tempoOverrideBpm, _this.tempoOverrideBpm) || other.tempoOverrideBpm == _this.tempoOverrideBpm));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as DetectionSettingsModel;
-  return Object.hash(runtimeType,_this.sensitivity,_this.filter,_this.status);
+  return Object.hash(runtimeType,_this.sensitivity,_this.filter,_this.status,_this.tempoMode,_this.tempoOverrideBpm);
 }
 
 @override
 String toString() {
   final _this = this as DetectionSettingsModel;
-  return 'DetectionSettingsModel(sensitivity: ${_this.sensitivity}, filter: ${_this.filter}, status: ${_this.status})';
+  return 'DetectionSettingsModel(sensitivity: ${_this.sensitivity}, filter: ${_this.filter}, status: ${_this.status}, tempoMode: ${_this.tempoMode}, tempoOverrideBpm: ${_this.tempoOverrideBpm})';
 }
 
 
@@ -1239,7 +1239,7 @@ abstract mixin class $DetectionSettingsModelCopyWith<$Res>  {
   factory $DetectionSettingsModelCopyWith(DetectionSettingsModel value, $Res Function(DetectionSettingsModel) _then) = _$DetectionSettingsModelCopyWithImpl;
 @useResult
 $Res call({
- double sensitivity, BeatFilter filter, DetectionStatus status
+ double sensitivity, BeatFilter filter, DetectionStatus status, TempoMode tempoMode, double? tempoOverrideBpm
 });
 
 
@@ -1256,12 +1256,14 @@ class _$DetectionSettingsModelCopyWithImpl<$Res>
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,Object? tempoMode = null,Object? tempoOverrideBpm = freezed,}) {
   return _then(DetectionSettingsModel(
 sensitivity: null == sensitivity ? _self.sensitivity : sensitivity // ignore: cast_nullable_to_non_nullable
 as double,filter: null == filter ? _self.filter : filter // ignore: cast_nullable_to_non_nullable
 as BeatFilter,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as DetectionStatus,
+as DetectionStatus,tempoMode: null == tempoMode ? _self.tempoMode : tempoMode // ignore: cast_nullable_to_non_nullable
+as TempoMode,tempoOverrideBpm: freezed == tempoOverrideBpm ? _self.tempoOverrideBpm : tempoOverrideBpm // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
@@ -1346,10 +1348,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status,  TempoMode tempoMode,  double? tempoOverrideBpm)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel() when $default != null:
-return $default(_that.sensitivity,_that.filter,_that.status);case _:
+return $default(_that.sensitivity,_that.filter,_that.status,_that.tempoMode,_that.tempoOverrideBpm);case _:
   return orElse();
 
 }
@@ -1367,10 +1369,10 @@ return $default(_that.sensitivity,_that.filter,_that.status);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double sensitivity,  BeatFilter filter,  DetectionStatus status,  TempoMode tempoMode,  double? tempoOverrideBpm)  $default,) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel():
-return $default(_that.sensitivity,_that.filter,_that.status);case _:
+return $default(_that.sensitivity,_that.filter,_that.status,_that.tempoMode,_that.tempoOverrideBpm);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1387,10 +1389,10 @@ return $default(_that.sensitivity,_that.filter,_that.status);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double sensitivity,  BeatFilter filter,  DetectionStatus status)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double sensitivity,  BeatFilter filter,  DetectionStatus status,  TempoMode tempoMode,  double? tempoOverrideBpm)?  $default,) {final _that = this;
 switch (_that) {
 case _DetectionSettingsModel() when $default != null:
-return $default(_that.sensitivity,_that.filter,_that.status);case _:
+return $default(_that.sensitivity,_that.filter,_that.status,_that.tempoMode,_that.tempoOverrideBpm);case _:
   return null;
 
 }
@@ -1402,12 +1404,14 @@ return $default(_that.sensitivity,_that.filter,_that.status);case _:
 @JsonSerializable()
 
 class _DetectionSettingsModel implements DetectionSettingsModel {
-  const _DetectionSettingsModel({this.sensitivity = 0.5, this.filter = BeatFilter.every, this.status = DetectionStatus.notRun});
+  const _DetectionSettingsModel({this.sensitivity = 0.5, this.filter = BeatFilter.every, this.status = DetectionStatus.notRun, this.tempoMode = TempoMode.steady, this.tempoOverrideBpm});
   factory _DetectionSettingsModel.fromJson(Map<String, dynamic> json) => _$DetectionSettingsModelFromJson(json);
 
 @override@JsonKey() final  double sensitivity;
 @override@JsonKey() final  BeatFilter filter;
 @override@JsonKey() final  DetectionStatus status;
+@override@JsonKey() final  TempoMode tempoMode;
+@override final  double? tempoOverrideBpm;
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
@@ -1422,18 +1426,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectionSettingsModel&&(identical(other.sensitivity, sensitivity) || other.sensitivity == sensitivity)&&(identical(other.filter, filter) || other.filter == filter)&&(identical(other.status, status) || other.status == status));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectionSettingsModel&&(identical(other.sensitivity, sensitivity) || other.sensitivity == sensitivity)&&(identical(other.filter, filter) || other.filter == filter)&&(identical(other.status, status) || other.status == status)&&(identical(other.tempoMode, tempoMode) || other.tempoMode == tempoMode)&&(identical(other.tempoOverrideBpm, tempoOverrideBpm) || other.tempoOverrideBpm == tempoOverrideBpm));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,sensitivity,filter,status);
+    return Object.hash(runtimeType,sensitivity,filter,status,tempoMode,tempoOverrideBpm);
 }
 
 @override
 String toString() {
-    return 'DetectionSettingsModel(sensitivity: $sensitivity, filter: $filter, status: $status)';
+    return 'DetectionSettingsModel(sensitivity: $sensitivity, filter: $filter, status: $status, tempoMode: $tempoMode, tempoOverrideBpm: $tempoOverrideBpm)';
 }
 
 
@@ -1444,7 +1448,7 @@ abstract mixin class _$DetectionSettingsModelCopyWith<$Res> implements $Detectio
   factory _$DetectionSettingsModelCopyWith(_DetectionSettingsModel value, $Res Function(_DetectionSettingsModel) _then) = __$DetectionSettingsModelCopyWithImpl;
 @override @useResult
 $Res call({
- double sensitivity, BeatFilter filter, DetectionStatus status
+ double sensitivity, BeatFilter filter, DetectionStatus status, TempoMode tempoMode, double? tempoOverrideBpm
 });
 
 
@@ -1461,12 +1465,14 @@ class __$DetectionSettingsModelCopyWithImpl<$Res>
 
 /// Create a copy of DetectionSettingsModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sensitivity = null,Object? filter = null,Object? status = null,Object? tempoMode = null,Object? tempoOverrideBpm = freezed,}) {
   return _then(_DetectionSettingsModel(
 sensitivity: null == sensitivity ? _self.sensitivity : sensitivity // ignore: cast_nullable_to_non_nullable
 as double,filter: null == filter ? _self.filter : filter // ignore: cast_nullable_to_non_nullable
 as BeatFilter,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as DetectionStatus,
+as DetectionStatus,tempoMode: null == tempoMode ? _self.tempoMode : tempoMode // ignore: cast_nullable_to_non_nullable
+as TempoMode,tempoOverrideBpm: freezed == tempoOverrideBpm ? _self.tempoOverrideBpm : tempoOverrideBpm // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 

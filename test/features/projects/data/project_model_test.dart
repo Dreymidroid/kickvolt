@@ -58,7 +58,7 @@ void main() {
       final original = sampleProject();
       final jsonMap = ProjectMapper.toJsonMap(original);
 
-      expect(jsonMap['schemaVersion'], 1);
+      expect(jsonMap['schemaVersion'], currentProjectSchemaVersion);
       expect(jsonMap['sampleRate'], 44100);
       expect(jsonMap['sampleCount'], original.sampleCount);
       expect(
@@ -140,14 +140,14 @@ void main() {
     final jsonMap = ProjectMapper.toJsonMap(sampleProject());
 
     final futureVersion = Map<String, dynamic>.from(jsonMap)
-      ..['schemaVersion'] = 2;
+      ..['schemaVersion'] = currentProjectSchemaVersion + 1;
     expect(
       () => ProjectMapper.fromJsonMap(futureVersion, projectId: 'proj-1'),
       throwsA(
         isA<ProjectSchemaVersionException>().having(
           (e) => e.schemaVersion,
           'schemaVersion',
-          2,
+          currentProjectSchemaVersion + 1,
         ),
       ),
     );
@@ -158,6 +158,50 @@ void main() {
       () => ProjectMapper.fromJsonMap(missingVersion, projectId: 'proj-1'),
       throwsA(isA<ProjectCorruptException>()),
     );
+  });
+
+  test('M4b fields (tempoMode, tempoOverrideBpm) round-trip and schemaVersion 1 migrates with defaults', () {
+    expect(currentProjectSchemaVersion, 2);
+
+    final varyingProject = sampleProject().copyWith(
+      detection: const DetectionSettings(
+        sensitivity: 0.6,
+        filter: BeatFilter.strong,
+        status: DetectionStatus.succeeded,
+        tempoMode: TempoMode.varying,
+        tempoOverrideBpm: 174.0,
+      ),
+    );
+    expect(varyingProject.tempoVaries, isTrue);
+
+    final jsonMap = ProjectMapper.toJsonMap(varyingProject);
+    expect(jsonMap['schemaVersion'], 2);
+    final detJson = jsonMap['detection'] as Map<String, dynamic>;
+    expect(detJson['tempoMode'], 'varying');
+    expect(detJson['tempoOverrideBpm'], 174.0);
+
+    final restored = ProjectMapper.fromJsonMap(
+      jsonDecode(jsonEncode(jsonMap)) as Map<String, dynamic>,
+      projectId: varyingProject.id,
+    );
+    expect(restored, varyingProject);
+    expect(restored.detection.tempoMode, TempoMode.varying);
+    expect(restored.detection.tempoOverrideBpm, 174.0);
+    expect(restored.tempoVaries, isTrue);
+
+    // Schema v1 project.json without tempoMode or tempoOverrideBpm loads with defaults.
+    final v1Json = jsonDecode(
+      jsonEncode(ProjectMapper.toJsonMap(sampleProject())),
+    ) as Map<String, dynamic>;
+    v1Json['schemaVersion'] = 1;
+    (v1Json['detection'] as Map<String, dynamic>)
+      ..remove('tempoMode')
+      ..remove('tempoOverrideBpm');
+
+    final migrated = ProjectMapper.fromJsonMap(v1Json, projectId: 'proj-1');
+    expect(migrated.detection.tempoMode, TempoMode.steady);
+    expect(migrated.detection.tempoOverrideBpm, isNull);
+    expect(migrated.tempoVaries, isFalse);
   });
 
   test('timebase invariant: 1,000 beats at 44.1 kHz and 48 kHz round-trip identically', () {

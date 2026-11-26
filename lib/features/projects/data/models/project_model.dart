@@ -7,7 +7,7 @@ import '../../domain/entities/detection_settings.dart';
 part 'project_model.freezed.dart';
 part 'project_model.g.dart';
 
-const int currentProjectSchemaVersion = 1;
+const int currentProjectSchemaVersion = 2;
 
 @freezed
 abstract class ProjectModel with _$ProjectModel {
@@ -76,6 +76,8 @@ abstract class DetectionSettingsModel with _$DetectionSettingsModel {
     @Default(0.5) double sensitivity,
     @Default(BeatFilter.every) BeatFilter filter,
     @Default(DetectionStatus.notRun) DetectionStatus status,
+    @Default(TempoMode.steady) TempoMode tempoMode,
+    double? tempoOverrideBpm,
   }) = _DetectionSettingsModel;
 
   factory DetectionSettingsModel.fromJson(Map<String, dynamic> json) =>

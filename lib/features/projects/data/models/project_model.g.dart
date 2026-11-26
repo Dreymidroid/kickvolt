@@ -120,6 +120,10 @@ _DetectionSettingsModel _$DetectionSettingsModelFromJson(
   status:
       $enumDecodeNullable(_$DetectionStatusEnumMap, json['status']) ??
       DetectionStatus.notRun,
+  tempoMode:
+      $enumDecodeNullable(_$TempoModeEnumMap, json['tempoMode']) ??
+      TempoMode.steady,
+  tempoOverrideBpm: (json['tempoOverrideBpm'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$DetectionSettingsModelToJson(
@@ -128,6 +132,8 @@ Map<String, dynamic> _$DetectionSettingsModelToJson(
   'sensitivity': instance.sensitivity,
   'filter': _$BeatFilterEnumMap[instance.filter]!,
   'status': _$DetectionStatusEnumMap[instance.status]!,
+  'tempoMode': _$TempoModeEnumMap[instance.tempoMode]!,
+  'tempoOverrideBpm': instance.tempoOverrideBpm,
 };
 
 const _$BeatFilterEnumMap = {
@@ -142,6 +148,11 @@ const _$DetectionStatusEnumMap = {
   DetectionStatus.notRun: 'notRun',
   DetectionStatus.succeeded: 'succeeded',
   DetectionStatus.failed: 'failed',
+};
+
+const _$TempoModeEnumMap = {
+  TempoMode.steady: 'steady',
+  TempoMode.varying: 'varying',
 };
 
 _ProjectSummaryModel _$ProjectSummaryModelFromJson(Map<String, dynamic> json) =>
