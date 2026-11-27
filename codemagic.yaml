@@ -34,3 +34,40 @@ workflows:
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/iphoneos/*.app
+
+  # Integration tests (integration_test/, docs/handoff/E2E-testing.md §A3) on an
+  # iOS simulator: real native decode/encode. Slow, so manual trigger only.
+  e2e-ios:
+    name: Integration tests (iOS simulator)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.47.2
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []        # start manually
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Boot simulator
+        script: |
+          xcrun simctl list devicetypes
+          xcrun simctl list runtimes
+          xcrun simctl shutdown all
+          # Newest installed iOS runtime and an iPhone 16 (fall back to the
+          # newest iPhone type) so an Xcode update doesn't break the step.
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="iOS" and x["isAvailable"]]; print(r[-1]["identifier"])')
+          DEVTYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-16
+          xcrun simctl list devicetypes | grep -q "$DEVTYPE" || DEVTYPE=$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; d=[x for x in json.load(sys.stdin)["devicetypes"] if x["name"].startswith("iPhone")]; print(d[-1]["identifier"])')
+          TEST_DEVICE=$(xcrun simctl create test-device "$DEVTYPE" "$RUNTIME")
+          xcrun simctl boot "$TEST_DEVICE"
+          echo "TEST_DEVICE=$TEST_DEVICE" >> $CM_ENV
+      - name: Integration tests
+        script: |
+          mkdir -p test-results
+          flutter -d $TEST_DEVICE test --machine integration_test \
+            > test-results/flutter.json
+        test_report: test-results/flutter.json
+    artifacts:
+      - test-results/flutter.json
