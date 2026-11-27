@@ -129,8 +129,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   int _lastPlayheadSample = 0;
 
   BeatAnalysis? _cachedAnalysis;
+  BeatAnalysis? _activePreviewAnalysis;
   DetectionResult? _lastPreviewResult;
   AnalysisCancelToken? _analysisCancelToken;
+  AnalysisCancelToken? _retrackCancelToken;
 
   Timer? _saveTimer;
   Project? _pendingSaveProject;
@@ -258,7 +260,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
         BeatEditorState.ready(
           project: project,
           peaks: peaks,
-          snap: project.bpm != null,
+          snap: project.bpm != null && !project.tempoVaries,
           playbackUnavailable: unavailable,
           latencyOffsetMs: effectiveLatencyMs,
           latencyCalibratedOn: settings.latencyCalibratedOn,
@@ -266,8 +268,13 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
           activeSheet: showFailed ? EditorSheet.detectFailed : EditorSheet.none,
           previewSensitivity: project.detection.sensitivity,
           previewFilter: project.detection.filter,
+          previewTempoMode: project.detection.tempoMode,
+          previewTempoOverrideBpm: project.detection.tempoOverrideBpm,
         ),
       );
+      if (showFailed) {
+        unawaited(_populateFailedSheetSuggestion(project.id));
+      }
       _lastPlayheadSample = initialPlayheadSample;
       _zoom.addListener(_ensureRawWindow);
       playhead.sample.addListener(_onPlayheadChanged);
@@ -451,6 +458,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   void toggleSnap() {
     final s = _ready;
     if (s == null || s.project.bpm == null) return;
+    if (s.project.tempoVaries) {
+      emit(s.copyWith(snap: false, infoMessage: 'Snap needs a steady tempo'));
+      return;
+    }
     emit(s.copyWith(snap: !s.snap));
   }
 
@@ -625,15 +636,23 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   // Auto-detect sheet & No-steady-beat sheet (§6.2)
   // ---------------------------------------------------------------------------
 
-  Future<void> openAutoDetectSheet({double? initialSensitivity}) async {
+  Future<void> openAutoDetectSheet({
+    double? initialSensitivity,
+    TempoMode? initialTempoMode,
+  }) async {
     final s = _ready;
     if (s == null) return;
+
+    await _retrackCancelToken?.cancel();
+    _retrackCancelToken = null;
 
     final sens = (initialSensitivity ?? s.project.detection.sensitivity).clamp(
       0.0,
       1.0,
     );
     final filter = s.project.detection.filter;
+    final tempoMode = initialTempoMode ?? s.project.detection.tempoMode;
+    final tempoOverride = s.project.detection.tempoOverrideBpm;
 
     emit(
       s.copyWith(
@@ -642,6 +661,9 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
         activeSheet: EditorSheet.autoDetect,
         previewSensitivity: sens,
         previewFilter: filter,
+        previewTempoMode: tempoMode,
+        previewTempoOverrideBpm: tempoOverride,
+        retracking: false,
         infoMessage: null,
       ),
     );
@@ -651,8 +673,39 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
 
     final cur = _ready;
     if (cur == null || cur.activeSheet != EditorSheet.autoDetect) return;
-    _applyPreview(cur, analysis, cur.previewSensitivity, cur.previewFilter);
+
+    final options = TrackingOptions(
+      targetBpm: cur.previewTempoOverrideBpm,
+      tempoMode: cur.previewTempoMode,
+    );
+    if (options == const TrackingOptions()) {
+      _activePreviewAnalysis = analysis;
+      _applyPreview(cur, analysis, cur.previewSensitivity, cur.previewFilter);
+    } else {
+      await _runPreviewRetrack(options);
+    }
   }
+
+  Future<void> _populateFailedSheetSuggestion(String projectId) async {
+    final detector = _detectionRepository;
+    if (detector == null) return;
+    final cached =
+        _cachedAnalysis ?? await detector.getCachedAnalysis(projectId);
+    if (cached == null || isClosed) return;
+    _cachedAnalysis = cached;
+    final cur = _ready;
+    if (cur == null) return;
+    emit(
+      cur.copyWith(
+        canTryTempoChangesOnFailure: _hasDecentLocalConfidenceOnFailure(cached),
+      ),
+    );
+  }
+
+  bool _hasDecentLocalConfidenceOnFailure(BeatAnalysis a) =>
+      a.suggestsTempoChanges ||
+      (a.localTempo.length >= 3 && a.candidates.length >= 4) ||
+      a.confidence >= 0.45;
 
   Future<BeatAnalysis?> _ensureAnalysis(String projectId) async {
     if (_cachedAnalysis != null) return _cachedAnalysis;
@@ -727,13 +780,14 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
 
   Future<void> cancelAnalysis() async {
     await _analysisCancelToken?.cancel();
+    await _retrackCancelToken?.cancel();
   }
 
   void setPreviewSensitivity(double sensitivity) {
     final s = _ready;
     if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
     final clamped = sensitivity.clamp(0.0, 1.0);
-    final analysis = _cachedAnalysis;
+    final analysis = _activePreviewAnalysis ?? _cachedAnalysis;
     if (analysis == null) {
       emit(s.copyWith(previewSensitivity: clamped));
       return;
@@ -747,32 +801,141 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     emit(s.copyWith(previewFilter: filter));
   }
 
+  /// Sets the user's tempo choice (`null` = Auto, or a BPM in 40–240) and
+  /// re-tracks from the cached analysis in the isolate (§4.2, §6).
+  Future<void> setPreviewTempoOverride(double? targetBpm) async {
+    final s = _ready;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
+    final clamped = targetBpm == null
+        ? null
+        : (targetBpm.clamp(40.0, 240.0) * 10.0).round() / 10.0;
+    emit(s.copyWith(previewTempoOverrideBpm: clamped));
+    await _runPreviewRetrack(
+      TrackingOptions(targetBpm: clamped, tempoMode: s.previewTempoMode),
+    );
+  }
+
+  /// Switches between `TempoMode.steady` and `TempoMode.varying` in the
+  /// Auto-detect sheet and re-tracks (§4.3, §6).
+  Future<void> setPreviewTempoMode(TempoMode mode) async {
+    final s = _ready;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
+    if (s.previewTempoMode == mode && !s.retracking) return;
+    emit(s.copyWith(previewTempoMode: mode));
+    await _runPreviewRetrack(
+      TrackingOptions(targetBpm: s.previewTempoOverrideBpm, tempoMode: mode),
+    );
+  }
+
+  Future<void> _runPreviewRetrack(TrackingOptions options) async {
+    final baseAnalysis = _cachedAnalysis;
+    final detector = _detectionRepository;
+    final s0 = _ready;
+    if (baseAnalysis == null || s0 == null || isClosed) return;
+
+    await _retrackCancelToken?.cancel();
+    final token = AnalysisCancelToken();
+    _retrackCancelToken = token;
+
+    emit(s0.copyWith(retracking: true));
+
+    try {
+      final BeatAnalysis retracked;
+      if (options == const TrackingOptions()) {
+        retracked = baseAnalysis;
+      } else if (detector != null) {
+        retracked = await detector.retrack(
+          s0.project.id,
+          baseAnalysis,
+          options,
+          cancelToken: token,
+        );
+      } else {
+        final songPath = _songPath ?? await _repository.songPath(s0.project.id);
+        retracked = await retrack(
+          baseAnalysis,
+          options,
+          wavPath: songPath,
+          isCancelled: () => token.isCancelled,
+        );
+      }
+
+      if (isClosed || token.isCancelled) return;
+      if (_retrackCancelToken == token) {
+        _retrackCancelToken = null;
+      }
+      _activePreviewAnalysis = retracked;
+      final cur = _ready;
+      if (cur == null || cur.activeSheet != EditorSheet.autoDetect) return;
+      _applyPreview(
+        cur.copyWith(retracking: false),
+        retracked,
+        cur.previewSensitivity,
+        cur.previewFilter,
+      );
+    } on AnalysisCancelledException {
+      if (_retrackCancelToken == token) {
+        _retrackCancelToken = null;
+      }
+      final cur = _ready;
+      if (!isClosed && cur != null && cur.retracking) {
+        emit(cur.copyWith(retracking: false));
+      }
+    } catch (e) {
+      if (_retrackCancelToken == token) {
+        _retrackCancelToken = null;
+      }
+      final cur = _ready;
+      if (!isClosed && cur != null) {
+        emit(
+          cur.copyWith(
+            retracking: false,
+            infoMessage: 'Could not re-track beats: $e',
+          ),
+        );
+      }
+    }
+  }
+
   void _applyPreview(
     BeatEditorReady s,
-    BeatAnalysis analysis,
+    BeatAnalysis activeAnalysis,
     double sensitivity,
     BeatFilter filter,
   ) {
+    final base = _cachedAnalysis ?? activeAnalysis;
     final detector = _detectionRepository;
     final result = detector != null
-        ? detector.classify(analysis, sensitivity)
-        : classifyBeats(analysis, sensitivity: sensitivity);
+        ? detector.classify(activeAnalysis, sensitivity)
+        : classifyBeats(activeAnalysis, sensitivity: sensitivity);
     _lastPreviewResult = result;
+    _activePreviewAnalysis = activeAnalysis;
     emit(
       s.copyWith(
         analyzing: false,
+        retracking: false,
         previewSensitivity: sensitivity,
         previewFilter: filter,
         previewBeats: result.beats,
         previewBpm: result.bpm,
         previewSections: result.sections,
         previewSucceeded: result.succeeded,
+        analysisAutoBpm: base.bpm > 0 ? base.bpm : activeAnalysis.bpm,
+        previewTempoCandidates: base.tempoCandidates.isNotEmpty
+            ? base.tempoCandidates
+            : activeAnalysis.tempoCandidates,
+        suggestsTempoChanges: base.suggestsTempoChanges,
+        previewSwing: activeAnalysis.swing,
+        canTryTempoChangesOnFailure: _hasDecentLocalConfidenceOnFailure(base),
       ),
     );
   }
 
   void closeSheet() {
     unawaited(_analysisCancelToken?.cancel());
+    _analysisCancelToken = null;
+    unawaited(_retrackCancelToken?.cancel());
+    _retrackCancelToken = null;
     final s = _ready;
     if (s == null) return;
     emit(
@@ -780,6 +943,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
         activeSheet: EditorSheet.none,
         tool: s.tool == EditorTool.auto ? EditorTool.edit : s.tool,
         analyzing: false,
+        retracking: false,
         previewBeats: null,
         previewBpm: null,
         previewSections: null,
@@ -793,8 +957,10 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   /// stack so undo restores beats, sections, bpm, beatPhaseSample and detection.
   void commitAutoDetect() {
     final s = _ready;
-    if (s == null || s.activeSheet != EditorSheet.autoDetect) return;
-    final analysis = _cachedAnalysis;
+    if (s == null || s.activeSheet != EditorSheet.autoDetect || s.retracking) {
+      return;
+    }
+    final analysis = _activePreviewAnalysis ?? _cachedAnalysis;
     if (analysis == null) return;
 
     final result =
@@ -804,10 +970,13 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
             : classifyBeats(analysis, sensitivity: s.previewSensitivity));
 
     if (!result.succeeded) {
+      final base = _cachedAnalysis ?? analysis;
       final updatedProject = s.project.copyWith(
         detection: s.project.detection.copyWith(
           sensitivity: s.previewSensitivity,
           filter: s.previewFilter,
+          tempoMode: s.previewTempoMode,
+          tempoOverrideBpm: s.previewTempoOverrideBpm,
           status: DetectionStatus.failed,
         ),
       );
@@ -820,6 +989,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
           previewBpm: null,
           previewSections: null,
           previewSucceeded: false,
+          canTryTempoChangesOnFailure: _hasDecentLocalConfidenceOnFailure(base),
         ),
       );
       _scheduleSave(updatedProject);
@@ -839,13 +1009,15 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
       newDetection: s.project.detection.copyWith(
         sensitivity: s.previewSensitivity,
         filter: s.previewFilter,
+        tempoMode: s.previewTempoMode,
+        tempoOverrideBpm: s.previewTempoOverrideBpm,
         status: DetectionStatus.succeeded,
       ),
     );
     _execute(
       cmd,
       transformState: (next) => next.copyWith(
-        snap: next.project.bpm != null,
+        snap: next.project.bpm != null && !next.project.tempoVaries,
         activeSheet: EditorSheet.none,
         tool: EditorTool.edit,
         previewBeats: null,
@@ -855,6 +1027,12 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
       ),
     );
     unawaited(_haptics.successNotification());
+  }
+
+  /// Action on the "No steady beat found" sheet when global confidence was low
+  /// but local confidence is decent (§6).
+  Future<void> tryTempoChangesFromFailedSheet() async {
+    await openAutoDetectSheet(initialTempoMode: TempoMode.varying);
   }
 
   void tapBeatsFromFailedSheet() {
@@ -1176,7 +1354,11 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     final s = _ready;
     final start = s?.bulkRangeStart;
     final end = s?.bulkRangeEnd;
-    if (s == null || start == null || end == null || s.project.bpm == null) {
+    if (s == null ||
+        start == null ||
+        end == null ||
+        s.project.bpm == null ||
+        s.project.tempoVaries) {
       return;
     }
     final hasAny = s.project.beats.any(
@@ -1303,7 +1485,9 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   }) {
     var next = s.copyWith(
       project: res.project,
-      snap: res.project.bpm == null ? false : s.snap,
+      snap: (res.project.bpm == null || res.project.tempoVaries)
+          ? false
+          : s.snap,
       canUndo: _commandStack.canUndo,
       canRedo: _commandStack.canRedo,
       selectedIndex: res.selectedIndex,
@@ -1372,6 +1556,7 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     _previewDebounceTimer = null;
     await _previewCancelToken?.cancel();
     await _analysisCancelToken?.cancel();
+    await _retrackCancelToken?.cancel();
     await _routeSub?.cancel();
     // Waits for any running save as well as the pending one.
     await _flushPendingSave();

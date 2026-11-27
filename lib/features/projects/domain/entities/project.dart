@@ -42,8 +42,13 @@ abstract class Project with _$Project {
 
   int get dropCount => beats.where((b) => b.type == BeatType.drop).length;
 
+  /// Derived from `detection.tempoMode` (§5): single source of truth so
+  /// `tempoVaries` and `detection.tempoMode` can never drift out of sync.
+  bool get tempoVaries => detection.tempoMode == TempoMode.varying;
+
   /// Whether [sample] sits on the BPM grid (within ~1 ms in frames).
   bool isOnGrid(int sample) {
+    if (tempoVaries) return false;
     final currentBpm = bpm;
     if (currentBpm == null || currentBpm <= 0) return false;
     final phase = beatPhaseSample ?? 0;

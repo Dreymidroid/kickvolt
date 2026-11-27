@@ -17,8 +17,13 @@ class EditorChipsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final kv = context.kv;
     final cubit = context.read<BeatEditorCubit>();
-    final bpm = state.project.bpm;
-    final bpmLabel = bpm == null ? '– BPM' : '${_formatBpm(bpm)} BPM';
+    final p = state.project;
+    final bpm = p.bpm;
+    final bpmLabel = bpm == null
+        ? '– BPM'
+        : p.tempoVaries
+        ? '~${_formatBpm(bpm)} BPM, varies'
+        : '${_formatBpm(bpm)} BPM';
 
     return SizedBox(
       height: 40,
@@ -31,11 +36,14 @@ class EditorChipsRow extends StatelessWidget {
                 children: [
                   KvChip(label: bpmLabel, mono: true, onPressed: () {}),
                   const SizedBox(width: 8),
-                  KvChip(
-                    label: 'Snap',
-                    icon: KvIcons.magnet,
-                    active: state.snap && bpm != null,
-                    onPressed: bpm == null ? null : cubit.toggleSnap,
+                  Tooltip(
+                    message: p.tempoVaries ? 'Snap needs a steady tempo' : '',
+                    child: KvChip(
+                      label: 'Snap',
+                      icon: KvIcons.magnet,
+                      active: state.snap && bpm != null && !p.tempoVaries,
+                      onPressed: bpm == null ? null : cubit.toggleSnap,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   KvChip(

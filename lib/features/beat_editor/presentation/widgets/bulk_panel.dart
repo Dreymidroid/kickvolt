@@ -27,7 +27,7 @@ class BulkPanel extends StatelessWidget {
       millis: true,
     );
     final endClock = formatClock(state.project.sampleToMs(end), millis: true);
-    final hasBpm = state.project.bpm != null;
+    final hasBpm = state.project.bpm != null && !state.project.tempoVaries;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

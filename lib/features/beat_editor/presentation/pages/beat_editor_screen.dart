@@ -195,7 +195,7 @@ class _EditorLayout extends StatelessWidget {
             bottom: 0,
             child: switch (state.activeSheet) {
               EditorSheet.autoDetect => AutoDetectSheet(state: state),
-              EditorSheet.detectFailed => const DetectFailedSheet(),
+              EditorSheet.detectFailed => DetectFailedSheet(state: state),
               EditorSheet.none => const SizedBox.shrink(),
             },
           ),

@@ -21,10 +21,13 @@ class ProjectMapper {
         projectId: projectId,
       );
     }
-    if (rawVersion != currentProjectSchemaVersion) {
+    if (rawVersion < 1 || rawVersion > currentProjectSchemaVersion) {
       throw ProjectSchemaVersionException(rawVersion, projectId: projectId);
     }
 
+    // Schema v1 -> v2 migration: new fields in DetectionSettingsModel
+    // (tempoMode, tempoOverrideBpm) have defaults, so v1 maps deserialize
+    // directly with steady mode and null override (§5).
     final ProjectModel model;
     try {
       model = ProjectModel.fromJson(json);
@@ -91,6 +94,8 @@ class ProjectMapper {
         sensitivity: model.detection.sensitivity,
         filter: model.detection.filter,
         status: model.detection.status,
+        tempoMode: model.detection.tempoMode,
+        tempoOverrideBpm: model.detection.tempoOverrideBpm,
       ),
       createdAt: model.createdAt.toUtc(),
       updatedAt: model.updatedAt.toUtc(),
@@ -141,6 +146,8 @@ class ProjectMapper {
         sensitivity: project.detection.sensitivity,
         filter: project.detection.filter,
         status: project.detection.status,
+        tempoMode: project.detection.tempoMode,
+        tempoOverrideBpm: project.detection.tempoOverrideBpm,
       ),
       createdAt: project.createdAt.toUtc(),
       updatedAt: project.updatedAt.toUtc(),

@@ -380,7 +380,8 @@ class ProjectRepositoryImpl implements ProjectRepository {
         notFoundIfMissing: false,
       );
       if (map == null) return null;
-      if (map['schemaVersion'] != currentProjectSchemaVersion) return null;
+      final v = map['schemaVersion'];
+      if (v is! int || v < 1 || v > currentProjectSchemaVersion) return null;
       final index = ProjectIndexModel.fromJson(map);
       return [for (final m in index.projects) ProjectMapper.summaryToEntity(m)];
     } catch (e) {
