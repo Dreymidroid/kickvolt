@@ -14,6 +14,7 @@ class ExportFailure {
     required this.kind,
     this.failedFileLabel = 'the guide track',
     this.neededMegabytes = 40,
+    this.failedFile,
     this.detail,
   });
 
@@ -26,6 +27,15 @@ class ExportFailure {
   /// Estimated megabytes to free up for diskFull copy.
   final int neededMegabytes;
 
+  /// The file being made when it failed, when known. An [ExportFailureKind
+  /// .encodeFailed] on [ExportFileKind.video] offers "Export without video".
+  final ExportFileKind? failedFile;
+
+  /// True when the guide video (M7) is what couldn't be made.
+  bool get isVideoFailure =>
+      kind == ExportFailureKind.encodeFailed &&
+      failedFile == ExportFileKind.video;
+
   /// Technical error string shown in small text for [ExportFailureKind.other].
   final String? detail;
 
@@ -33,6 +43,7 @@ class ExportFailure {
     ExportFileKind.guide => 'the guide track',
     ExportFileKind.song => 'the song',
     ExportFileKind.preview => 'the preview mix',
+    ExportFileKind.video => 'the guide video',
   };
 
   /// Title on the error sheet (§7.3).
@@ -47,6 +58,8 @@ class ExportFailure {
     ExportFailureKind.interrupted =>
       'The export stopped when KickVolt was closed. Try again and keep the '
           'app open until it’s done.',
+    ExportFailureKind.encodeFailed when isVideoFailure =>
+      'This phone couldn’t make the guide video. Export without it?',
     ExportFailureKind.encodeFailed =>
       'This phone couldn’t make an M4A of this song. WAV works everywhere.',
     ExportFailureKind.sourceMissing =>

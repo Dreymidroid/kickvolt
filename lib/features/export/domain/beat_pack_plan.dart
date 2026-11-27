@@ -6,6 +6,7 @@ import '../../beat_detection/domain/beat_filter_view.dart';
 import '../../projects/domain/entities/project.dart';
 import 'entities/beat_pack.dart';
 import 'entities/export_options.dart';
+import 'guide_video_plan.dart';
 
 const int _maxTitleCodeUnits = 60;
 const String _fallbackExportTitle = 'KickVolt';
@@ -54,8 +55,9 @@ String sanitizeExportTitle(String title) {
 
 /// Pure beat-pack planner (§4.1, §4.6, §4.7).
 ///
-/// Execution order is `guide` → `song` → `preview` so the guide track is
-/// rendered first.
+/// Execution order is `guide` → `video` → `song` → `preview` so the guide track
+/// is rendered first and the guide video (M7) can be encoded from it. The
+/// video is planned only together with the guide track, whose WAV it needs.
 BeatPackPlan planBeatPack(Project project, ExportOptions options) {
   final sanitizedTitle = sanitizeExportTitle(project.title);
   final ext = options.format.extension;
@@ -85,6 +87,30 @@ BeatPackPlan planBeatPack(Project project, ExportOptions options) {
       ),
     );
   }
+  GuideVideoPlan? guideVideo;
+  var videoBytes = 0;
+  if (options.includeVideo && options.includeGuide && project.sampleRate > 0) {
+    guideVideo = planGuideVideo(
+      sampleRate: project.sampleRate,
+      frameCount: frameCount,
+      visibleBeatSamples: visibleBeatSamples,
+    );
+    videoBytes = estimateGuideVideoBytes(
+      frameCount: frameCount,
+      sampleRate: project.sampleRate,
+    );
+    files.add(
+      PlannedExportFile(
+        kind: ExportFileKind.video,
+        fileName: '${sanitizedTitle}_guide.mp4',
+        channels: guideChannels,
+        frameCount: frameCount,
+        // Not a WAV: the estimated MP4 size (kept out of the audio total).
+        estimatedWavBytes: videoBytes,
+        clickCount: visibleBeatSamples.length,
+      ),
+    );
+  }
   if (options.includeSong) {
     files.add(
       PlannedExportFile(
@@ -108,16 +134,18 @@ BeatPackPlan planBeatPack(Project project, ExportOptions options) {
     );
   }
 
-  final totalWavBytes = files.fold<int>(
-    0,
-    (sum, f) => sum + f.estimatedWavBytes,
-  );
+  final totalWavBytes = files
+      .where((f) => f.kind != ExportFileKind.video)
+      .fold<int>(0, (sum, f) => sum + f.estimatedWavBytes);
   // §4.7: WAV: 44 + frames * channels * 2 per file;
   // M4A: WAV estimate * 0.25 for the transient WAV plus the M4A.
-  final estimatedDiskBytes = switch (options.format) {
-    AudioFormat.wav => totalWavBytes,
-    AudioFormat.m4a => (totalWavBytes * 0.25).ceil(),
-  };
+  // M7 §6: plus the guide video, bitrate × duration + 10%.
+  final estimatedDiskBytes =
+      switch (options.format) {
+        AudioFormat.wav => totalWavBytes,
+        AudioFormat.m4a => (totalWavBytes * 0.25).ceil(),
+      } +
+      videoBytes;
 
   return BeatPackPlan(
     projectId: project.id,
@@ -130,5 +158,6 @@ BeatPackPlan planBeatPack(Project project, ExportOptions options) {
     visibleBeatSamples: visibleBeatSamples,
     files: files,
     estimatedDiskBytes: estimatedDiskBytes,
+    guideVideo: guideVideo,
   );
 }

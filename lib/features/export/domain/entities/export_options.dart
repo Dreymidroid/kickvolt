@@ -15,7 +15,8 @@ enum AudioFormat {
 enum ExportFileKind {
   song('Song'),
   guide('Guide track'),
-  preview('Preview mix');
+  preview('Preview mix'),
+  video('Guide video');
 
   const ExportFileKind(this.displayLabel);
 
@@ -28,6 +29,7 @@ class ExportOptions {
     this.includeSong = true,
     this.includeGuide = true,
     this.includePreview = false,
+    this.includeVideo = false,
     this.clickStyle = ClickStyle.snap,
     this.format = AudioFormat.wav,
     this.monoGuide = false,
@@ -36,6 +38,9 @@ class ExportOptions {
   final bool includeSong;
   final bool includeGuide;
   final bool includePreview;
+
+  /// Guide video (M7). Only honoured when `Entitlements.hasGuideVideo`.
+  final bool includeVideo;
   final ClickStyle clickStyle;
   final AudioFormat format;
   final bool monoGuide;
@@ -44,6 +49,7 @@ class ExportOptions {
     bool? includeSong,
     bool? includeGuide,
     bool? includePreview,
+    bool? includeVideo,
     ClickStyle? clickStyle,
     AudioFormat? format,
     bool? monoGuide,
@@ -52,6 +58,7 @@ class ExportOptions {
       includeSong: includeSong ?? this.includeSong,
       includeGuide: includeGuide ?? this.includeGuide,
       includePreview: includePreview ?? this.includePreview,
+      includeVideo: includeVideo ?? this.includeVideo,
       clickStyle: clickStyle ?? this.clickStyle,
       format: format ?? this.format,
       monoGuide: monoGuide ?? this.monoGuide,
@@ -65,6 +72,7 @@ class ExportOptions {
           other.includeSong == includeSong &&
           other.includeGuide == includeGuide &&
           other.includePreview == includePreview &&
+          other.includeVideo == includeVideo &&
           other.clickStyle == clickStyle &&
           other.format == format &&
           other.monoGuide == monoGuide;
@@ -74,6 +82,7 @@ class ExportOptions {
     includeSong,
     includeGuide,
     includePreview,
+    includeVideo,
     clickStyle,
     format,
     monoGuide,

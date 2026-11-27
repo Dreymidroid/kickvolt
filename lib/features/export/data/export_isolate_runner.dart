@@ -306,6 +306,11 @@ Future<void> _exportStepIsolateEntry(_ExportStepIsolateRequest req) async {
           stats.channels,
           stats.frameCount,
         ]);
+
+      case ExportFileKind.video:
+        // The guide video is encoded natively (`encodeGuideVideo`), never in
+        // this isolate.
+        throw StateError('The guide video is not rendered in Dart.');
     }
   } on GuideTrackCancelledException {
     req.sendPort.send(<Object?>['error', 'cancelled', 'Cancelled']);
