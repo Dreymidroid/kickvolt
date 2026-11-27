@@ -18,6 +18,7 @@ void main() {
       expect(s.defaultClickStyle, ClickStyle.snap);
       expect(s.defaultAudioFormat, AudioFormat.wav);
       expect(s.includePreviewByDefault, isFalse);
+      expect(s.includeVideoByDefault, isFalse);
       expect(s.monoGuideTrack, isFalse);
       expect(s.defaultSensitivity, 0.5);
       expect(s.onboardingDone, isFalse);
@@ -36,6 +37,7 @@ void main() {
           defaultClickStyle: ClickStyle.kick,
           defaultAudioFormat: AudioFormat.m4a,
           includePreviewByDefault: true,
+          includeVideoByDefault: true,
           monoGuideTrack: true,
           defaultSensitivity: 0.75,
           onboardingDone: true,
@@ -51,6 +53,7 @@ void main() {
       expect(loaded.defaultClickStyle, ClickStyle.kick);
       expect(loaded.defaultAudioFormat, AudioFormat.m4a);
       expect(loaded.includePreviewByDefault, isTrue);
+      expect(loaded.includeVideoByDefault, isTrue);
       expect(loaded.monoGuideTrack, isTrue);
       expect(loaded.defaultSensitivity, 0.75);
       expect(loaded.onboardingDone, isTrue);

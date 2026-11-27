@@ -91,6 +91,13 @@ void main() {
       );
     });
 
+    test('guide video in packs', () async {
+      await check(
+        (c) => c.setIncludeVideoByDefault(true),
+        (s) => s.includeVideoByDefault,
+      );
+    });
+
     test('haptics', () async {
       await check((c) => c.setHapticsEnabled(false), (s) => !s.hapticsEnabled);
     });
