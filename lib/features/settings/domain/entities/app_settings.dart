@@ -1,5 +1,8 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../../core/audio_math/click_synth.dart';
+import '../../../export/domain/entities/export_options.dart';
+
 part 'app_settings.freezed.dart';
 
 /// Audio output route classification used for latency calibration and
@@ -24,5 +27,11 @@ abstract class AppSettings with _$AppSettings {
 
     /// Global haptics switch (§6.2).
     @Default(true) bool hapticsEnabled,
+
+    /// Export defaults (§6.4). The Export screen starts from these.
+    @Default(ClickStyle.snap) ClickStyle defaultClickStyle,
+    @Default(AudioFormat.wav) AudioFormat defaultAudioFormat,
+    @Default(false) bool includePreviewByDefault,
+    @Default(false) bool monoGuideTrack,
   }) = _AppSettings;
 }
