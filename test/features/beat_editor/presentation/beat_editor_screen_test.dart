@@ -44,6 +44,7 @@ void main() {
     AppSettings initialSettings = const AppSettings(
       latencyOffsetMs: 40,
       latencyCalibratedOn: OutputKind.builtIn,
+      coachMarksDone: true,
     ),
     int Function()? nowUs,
   }) async {

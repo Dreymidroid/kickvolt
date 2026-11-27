@@ -1,6 +1,10 @@
 export 'bloc/latency_calibration_cubit.dart';
+export 'bloc/settings_cubit.dart';
+export 'data/external_link_service.dart';
 export 'data/output_route_service.dart';
 export 'data/repositories/settings_repository.dart';
 export 'domain/entities/app_settings.dart';
 export 'domain/latency_calibration.dart';
+export 'domain/sensitivity_preset.dart';
 export 'presentation/pages/latency_calibration_screen.dart';
+export 'presentation/pages/settings_screen.dart';

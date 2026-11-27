@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../app/app_router.dart';
 import '../../../../shared/shared.dart';
 import '../../../import/presentation/widgets/library_track_sheet.dart'
     show formatDuration;
@@ -190,12 +191,7 @@ class ExportSuccessView extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           TextButton(
-            // The how-to screens arrive with M8; until then this explains so.
-            onPressed: () => ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                const SnackBar(content: Text('How-to guides are coming soon')),
-              ),
+            onPressed: () => context.router.push(HowToRoute()),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

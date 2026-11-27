@@ -172,6 +172,9 @@ class FakeCubitAudioNative implements AudioNative {
   Future<List<LibraryTrack>> listMusicLibrary() async => const [];
 
   @override
+  Future<bool> requestAudioPermission() async => true;
+
+  @override
   Future<LibraryTrack?> pickFromMusicLibrary() async => null;
 
   @override

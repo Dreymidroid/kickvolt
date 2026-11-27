@@ -11,6 +11,7 @@ import '../../features/export/data/share_service.dart';
 import '../../features/import/data/datasources/source_picker.dart';
 import '../../features/import/data/repositories/import_repository.dart';
 import '../../features/projects/data/repositories/project_repository.dart';
+import '../../features/settings/data/external_link_service.dart';
 import '../../features/settings/data/output_route_service.dart';
 import '../../features/settings/data/repositories/settings_repository.dart';
 import '../audio_native/audio_native_client.dart';
@@ -27,6 +28,9 @@ void setupLocator() {
     () async => ProjectPaths((await getApplicationDocumentsDirectory()).path),
   );
   locator.registerLazySingleton<SettingsRepository>(SettingsRepositoryImpl.new);
+  locator.registerLazySingleton<ExternalLinkService>(
+    UrlLauncherExternalLinkService.new,
+  );
   locator.registerLazySingleton<OutputRouteService>(
     AudioSessionOutputRouteService.new,
   );
@@ -45,7 +49,10 @@ void setupLocator() {
     ),
   );
   locator.registerLazySingleton<ProjectRepository>(
-    () => ProjectRepositoryImpl(paths: () => locator<Future<ProjectPaths>>()),
+    () => ProjectRepositoryImpl(
+      paths: () => locator<Future<ProjectPaths>>(),
+      settingsRepository: locator<SettingsRepository>(),
+    ),
   );
   locator.registerLazySingleton<BeatDetectionRepository>(
     () => BeatDetectionRepositoryImpl(

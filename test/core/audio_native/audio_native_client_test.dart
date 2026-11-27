@@ -166,5 +166,27 @@ void main() {
       await client.endBackgroundWork(token);
       verify(() => host.endBackgroundWork(42)).called(1);
     });
+
+    test('requestAudioPermission delegates granted/denied results and maps PlatformException', () async {
+      when(() => host.requestAudioPermission()).thenAnswer((_) async => true);
+      expect(await client.requestAudioPermission(), isTrue);
+
+      when(() => host.requestAudioPermission()).thenAnswer((_) async => false);
+      expect(await client.requestAudioPermission(), isFalse);
+
+      when(() => host.requestAudioPermission()).thenThrow(
+        PlatformException(code: 'permission_denied', message: 'Denied'),
+      );
+      await expectLater(
+        client.requestAudioPermission(),
+        throwsA(
+          isA<AudioNativeException>().having(
+            (e) => e.kind,
+            'kind',
+            AudioErrorKind.permissionDenied,
+          ),
+        ),
+      );
+    });
   });
 }

@@ -441,6 +441,29 @@ class AudioHostApi {
     return (pigeonVar_replyValue! as List<Object?>).cast<LibraryTrack>();
   }
 
+  /// Requests runtime permission for music/audio library access without
+  /// opening a picker (Android `READ_MEDIA_AUDIO` on API 33+,
+  /// `READ_EXTERNAL_STORAGE` on API <= 32; iOS
+  /// `MPMediaLibrary.requestAuthorization`). Returns `true` if granted,
+  /// `false` if denied.
+  Future<bool> requestAudioPermission() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.requestAudioPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as bool;
+  }
+
   /// Android only: copies a `content://` URI to [destPath].
   Future<void> copyContentUri(String uri, String destPath) async {
     final pigeonVar_channelName =

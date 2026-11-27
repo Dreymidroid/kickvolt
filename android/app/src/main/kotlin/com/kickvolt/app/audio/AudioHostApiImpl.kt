@@ -48,13 +48,18 @@ class AudioHostApiImpl(
     override suspend fun pickFromMusicLibrary(): LibraryTrack? =
         throw FlutterError("unsupported", "Use listMusicLibrary on Android.")
 
-    override suspend fun listMusicLibrary(): List<LibraryTrack> {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    private fun audioPermissionName(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
-        if (!permissions.request(permission)) {
+
+    override suspend fun requestAudioPermission(): Boolean =
+        permissions.request(audioPermissionName())
+
+    override suspend fun listMusicLibrary(): List<LibraryTrack> {
+        if (!permissions.request(audioPermissionName())) {
             throw FlutterError("permission_denied", "KickVolt needs access to your music to list songs.")
         }
         return withContext(Dispatchers.IO) { queryMediaStore() }

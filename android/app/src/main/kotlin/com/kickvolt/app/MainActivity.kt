@@ -37,13 +37,13 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private suspend fun requestPermission(permission: String): Boolean {
-        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) return true
+    private suspend fun requestPermission(permission: String): Boolean = withContext(Dispatchers.Main) {
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) return@withContext true
         pendingPermission?.complete(false)
         val deferred = CompletableDeferred<Boolean>()
         pendingPermission = deferred
         requestPermissions(arrayOf(permission), PERMISSION_REQUEST)
-        return deferred.await()
+        deferred.await()
     }
 
     private suspend fun openDocumentTree(): Uri? = withContext(Dispatchers.Main) {

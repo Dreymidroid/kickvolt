@@ -6,11 +6,13 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../../app/app_router.dart';
 import '../../../../shared/shared.dart';
+import '../../../onboarding/domain/first_run.dart';
 import '../../bloc/beat_editor_cubit.dart';
 import '../widgets/auto_detect_sheet.dart';
 import '../widgets/beat_inspector_panel.dart';
 import '../widgets/beat_timeline.dart';
 import '../widgets/bulk_panel.dart';
+import '../widgets/coach_marks_overlay.dart';
 import '../widgets/detect_failed_sheet.dart';
 import '../widgets/edit_panel.dart';
 import '../widgets/editor_controls.dart';
@@ -126,10 +128,38 @@ class _EditorErrorView extends StatelessWidget {
   }
 }
 
-class _EditorLayout extends StatelessWidget {
+class _EditorLayout extends StatefulWidget {
   const _EditorLayout({required this.state});
 
   final BeatEditorReady state;
+
+  @override
+  State<_EditorLayout> createState() => _EditorLayoutState();
+}
+
+class _EditorLayoutState extends State<_EditorLayout> {
+  final _waveformKey = GlobalKey();
+  final _toolsKey = GlobalKey();
+  final _exportKey = GlobalKey();
+  late bool _showCoach;
+
+  BeatEditorReady get state => widget.state;
+
+  @override
+  void initState() {
+    super.initState();
+    final repo = context.read<BeatEditorCubit>().settingsRepository;
+    _showCoach = repo != null && shouldShowCoachMarks(repo.current);
+  }
+
+  Future<void> _dismissCoach() async {
+    if (!_showCoach) return;
+    setState(() => _showCoach = false);
+    final repo = context.read<BeatEditorCubit>().settingsRepository;
+    if (repo != null) {
+      await repo.save(completeCoachMarks(repo.current));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,6 +175,7 @@ class _EditorLayout extends StatelessWidget {
               bottom: false,
               child: EditorTopBar(
                 state: state,
+                exportButtonKey: _exportKey,
                 onExport: () async {
                   await cubit.flushPendingSave();
                   if (!context.mounted) return;
@@ -163,7 +194,12 @@ class _EditorLayout extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             // Ruler, section labels and waveform. 288 px tall on a 390×844 phone.
-            Expanded(child: BeatTimeline(state: state)),
+            Expanded(
+              child: KeyedSubtree(
+                key: _waveformKey,
+                child: BeatTimeline(state: state),
+              ),
+            ),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -177,9 +213,21 @@ class _EditorLayout extends StatelessWidget {
                 ],
               ),
             ),
-            ToolTabBar(tool: state.tool),
+            KeyedSubtree(
+              key: _toolsKey,
+              child: ToolTabBar(tool: state.tool),
+            ),
           ],
         ),
+        if (_showCoach && !hasSheet)
+          Positioned.fill(
+            child: CoachMarksOverlay(
+              waveformKey: _waveformKey,
+              toolsKey: _toolsKey,
+              exportPillKey: _exportKey,
+              onDismissed: _dismissCoach,
+            ),
+          ),
         if (hasSheet) ...[
           // Dim scrim matching `rgba(5,5,8,0.55)` in EditorAutoDetect / EditorDetectFailed.
           Positioned.fill(
