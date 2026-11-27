@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 
 import 'audio_api.g.dart';
 
-export 'audio_api.g.dart' show DecodeResult, LibraryTrack, MediaInfo;
+export 'audio_api.g.dart'
+    show DecodeResult, GuideVideoSpec, LibraryTrack, MediaInfo;
 
 /// Default bitrate for M4A (AAC-LC) exports: 192 kbps (§5.1).
 const int kDefaultM4aBitrate = 192000;
@@ -99,6 +100,15 @@ abstract interface class AudioNative {
 
   /// iOS: ends a background task started by [beginBackgroundWork]. Android: no-op.
   Future<void> endBackgroundWork(int token);
+
+  /// Encodes the M7 guide video described by [spec] (H.264 + the guide WAV as
+  /// AAC in an MP4). [onProgress] receives the fraction of frames written.
+  /// Cancel with [cancel] using the same [jobId].
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  });
 }
 
 class AudioNativeClient implements AudioNative, AudioProgressApi {
@@ -185,6 +195,20 @@ class AudioNativeClient implements AudioNative, AudioProgressApi {
   @override
   Future<void> endBackgroundWork(int token) =>
       _guard(() => _host.endBackgroundWork(token));
+
+  @override
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  }) async {
+    if (onProgress != null) _progress[jobId] = onProgress;
+    try {
+      return await _guard(() => _host.encodeGuideVideo(jobId, spec));
+    } finally {
+      _progress.remove(jobId);
+    }
+  }
 
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {

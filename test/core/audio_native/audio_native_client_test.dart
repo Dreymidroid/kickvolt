@@ -189,4 +189,69 @@ void main() {
       );
     });
   });
+
+  group('AudioNativeClient M7 encodeGuideVideo', () {
+    final spec = GuideVideoSpec(
+      fps: 30,
+      width: 1080,
+      height: 1920,
+      totalFrames: 90,
+      flashFrames: [0, 15, 30],
+      beatNumbers: [1, 2, 3],
+      audioWavPath: '/pack/song_beats.wav',
+      outPath: '/pack/song_guide.mp4.part',
+      videoBitrate: 2000000,
+      audioBitrate: 192000,
+    );
+
+    test(
+      'forwards the spec and progress, returns the probed MediaInfo',
+      () async {
+        when(() => host.encodeGuideVideo('v-1', spec)).thenAnswer((_) async {
+          client.onProgress('v-1', 0.5);
+          return MediaInfo(
+            sampleRate: 44100,
+            channels: 2,
+            durationUs: 3000000,
+            hasVideo: true,
+            videoWidth: 720,
+            videoHeight: 1280,
+            videoFrameCount: 90,
+            videoDurationUs: 3000000,
+          );
+        });
+
+        final progress = <double>[];
+        final info = await client.encodeGuideVideo(
+          jobId: 'v-1',
+          spec: spec,
+          onProgress: progress.add,
+        );
+        expect(progress, [0.5]);
+        expect(info.hasVideo, isTrue);
+        expect(info.videoFrameCount, 90);
+        expect(info.videoWidth, 720);
+        // The progress listener is removed once the job ends.
+        client.onProgress('v-1', 0.9);
+        expect(progress, [0.5]);
+      },
+    );
+
+    test('maps encode_failed, disk_full and cancelled', () async {
+      for (final (code, kind) in [
+        ('encode_failed', AudioErrorKind.encodeFailed),
+        ('disk_full', AudioErrorKind.diskFull),
+        ('cancelled', AudioErrorKind.cancelled),
+      ]) {
+        when(() => host.encodeGuideVideo('v-$code', spec))
+            .thenThrow(PlatformException(code: code, message: 'x'));
+        await expectLater(
+          client.encodeGuideVideo(jobId: 'v-$code', spec: spec),
+          throwsA(
+            isA<AudioNativeException>().having((e) => e.kind, 'kind', kind),
+          ),
+        );
+      }
+    });
+  });
 }

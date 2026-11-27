@@ -50,19 +50,64 @@ class LibraryTrack {
   String uri;
 }
 
-/// Duration and format of an audio file as the platform sees it.
+/// Duration and format of a media file as the platform sees it. The audio
+/// fields describe the first audio track; the `video*` fields are set only for
+/// files with a video track (the M7 guide video).
 class MediaInfo {
   MediaInfo({
     required this.sampleRate,
     required this.channels,
     required this.durationUs,
     this.frameCount,
+    this.hasVideo,
+    this.videoWidth,
+    this.videoHeight,
+    this.videoFrameCount,
+    this.videoDurationUs,
   });
 
   int sampleRate;
   int channels;
   int durationUs;
   int? frameCount;
+  bool? hasVideo;
+  int? videoWidth;
+  int? videoHeight;
+
+  /// Number of video samples (frames) in the track, counted by reading it.
+  int? videoFrameCount;
+  int? videoDurationUs;
+}
+
+/// What the native guide-video encoder renders (M7 §5). Timing is decided in
+/// Dart: frame `k` is presented at exactly `k / fps`; [flashFrames] (ascending)
+/// and [beatNumbers] (parallel, 1-based) fully determine every frame's look.
+class GuideVideoSpec {
+  GuideVideoSpec({
+    required this.fps,
+    required this.width,
+    required this.height,
+    required this.totalFrames,
+    required this.flashFrames,
+    required this.beatNumbers,
+    required this.audioWavPath,
+    required this.outPath,
+    required this.videoBitrate,
+    required this.audioBitrate,
+  });
+
+  int fps;
+  int width;
+  int height;
+  int totalFrames;
+  List<int> flashFrames;
+  List<int> beatNumbers;
+
+  /// The pack's guide track (16-bit PCM WAV), muxed as AAC.
+  String audioWavPath;
+  String outPath;
+  int videoBitrate;
+  int audioBitrate;
 }
 
 /// Native audio work. Long jobs run off the platform main thread and report
@@ -132,6 +177,15 @@ abstract class AudioHostApi {
   /// is backgrounded. Android: no-op.
   int beginBackgroundWork(String name);
   void endBackgroundWork(int token);
+
+  /// Encodes the guide video (M7): H.264 at [GuideVideoSpec.fps] constant
+  /// frame rate with the guide WAV as AAC audio, in an MPEG-4 container. Falls
+  /// back to 720 × 1280 if the encoder refuses the requested size (the result
+  /// says which size was written). Progress through AudioProgressApi (fraction
+  /// of totalFrames written). Fails with `disk_full`, `encode_failed`,
+  /// `cancelled`.
+  @async
+  MediaInfo encodeGuideVideo(String jobId, GuideVideoSpec spec);
 }
 
 @FlutterApi()

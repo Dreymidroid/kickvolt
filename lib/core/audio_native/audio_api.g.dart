@@ -235,13 +235,20 @@ class LibraryTrack {
   }
 }
 
-/// Duration and format of an audio file as the platform sees it.
+/// Duration and format of a media file as the platform sees it. The audio
+/// fields describe the first audio track; the `video*` fields are set only for
+/// files with a video track (the M7 guide video).
 class MediaInfo {
   MediaInfo({
     required this.sampleRate,
     required this.channels,
     required this.durationUs,
     this.frameCount,
+    this.hasVideo,
+    this.videoWidth,
+    this.videoHeight,
+    this.videoFrameCount,
+    this.videoDurationUs,
   });
 
   int sampleRate;
@@ -252,8 +259,29 @@ class MediaInfo {
 
   int? frameCount;
 
+  bool? hasVideo;
+
+  int? videoWidth;
+
+  int? videoHeight;
+
+  /// Number of video samples (frames) in the track, counted by reading it.
+  int? videoFrameCount;
+
+  int? videoDurationUs;
+
   List<Object?> _toList() {
-    return <Object?>[sampleRate, channels, durationUs, frameCount];
+    return <Object?>[
+      sampleRate,
+      channels,
+      durationUs,
+      frameCount,
+      hasVideo,
+      videoWidth,
+      videoHeight,
+      videoFrameCount,
+      videoDurationUs,
+    ];
   }
 
   Object encode() {
@@ -267,6 +295,11 @@ class MediaInfo {
       channels: result[1]! as int,
       durationUs: result[2]! as int,
       frameCount: result[3] as int?,
+      hasVideo: result[4] as bool?,
+      videoWidth: result[5] as int?,
+      videoHeight: result[6] as int?,
+      videoFrameCount: result[7] as int?,
+      videoDurationUs: result[8] as int?,
     );
   }
 
@@ -282,7 +315,12 @@ class MediaInfo {
     return _deepEquals(sampleRate, other.sampleRate) &&
         _deepEquals(channels, other.channels) &&
         _deepEquals(durationUs, other.durationUs) &&
-        _deepEquals(frameCount, other.frameCount);
+        _deepEquals(frameCount, other.frameCount) &&
+        _deepEquals(hasVideo, other.hasVideo) &&
+        _deepEquals(videoWidth, other.videoWidth) &&
+        _deepEquals(videoHeight, other.videoHeight) &&
+        _deepEquals(videoFrameCount, other.videoFrameCount) &&
+        _deepEquals(videoDurationUs, other.videoDurationUs);
   }
 
   @override
@@ -291,7 +329,111 @@ class MediaInfo {
 
   @override
   String toString() {
-    return 'MediaInfo(sampleRate: $sampleRate, channels: $channels, durationUs: $durationUs, frameCount: $frameCount)';
+    return 'MediaInfo(sampleRate: $sampleRate, channels: $channels, durationUs: $durationUs, frameCount: $frameCount, hasVideo: $hasVideo, videoWidth: $videoWidth, videoHeight: $videoHeight, videoFrameCount: $videoFrameCount, videoDurationUs: $videoDurationUs)';
+  }
+}
+
+/// What the native guide-video encoder renders (M7 §5). Timing is decided in
+/// Dart: frame `k` is presented at exactly `k / fps`; [flashFrames] (ascending)
+/// and [beatNumbers] (parallel, 1-based) fully determine every frame's look.
+class GuideVideoSpec {
+  GuideVideoSpec({
+    required this.fps,
+    required this.width,
+    required this.height,
+    required this.totalFrames,
+    required this.flashFrames,
+    required this.beatNumbers,
+    required this.audioWavPath,
+    required this.outPath,
+    required this.videoBitrate,
+    required this.audioBitrate,
+  });
+
+  int fps;
+
+  int width;
+
+  int height;
+
+  int totalFrames;
+
+  List<int> flashFrames;
+
+  List<int> beatNumbers;
+
+  /// The pack's guide track (16-bit PCM WAV), muxed as AAC.
+  String audioWavPath;
+
+  String outPath;
+
+  int videoBitrate;
+
+  int audioBitrate;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      fps,
+      width,
+      height,
+      totalFrames,
+      flashFrames,
+      beatNumbers,
+      audioWavPath,
+      outPath,
+      videoBitrate,
+      audioBitrate,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static GuideVideoSpec decode(Object result) {
+    result as List<Object?>;
+    return GuideVideoSpec(
+      fps: result[0]! as int,
+      width: result[1]! as int,
+      height: result[2]! as int,
+      totalFrames: result[3]! as int,
+      flashFrames: (result[4]! as List<Object?>).cast<int>(),
+      beatNumbers: (result[5]! as List<Object?>).cast<int>(),
+      audioWavPath: result[6]! as String,
+      outPath: result[7]! as String,
+      videoBitrate: result[8]! as int,
+      audioBitrate: result[9]! as int,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! GuideVideoSpec || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(fps, other.fps) &&
+        _deepEquals(width, other.width) &&
+        _deepEquals(height, other.height) &&
+        _deepEquals(totalFrames, other.totalFrames) &&
+        _deepEquals(flashFrames, other.flashFrames) &&
+        _deepEquals(beatNumbers, other.beatNumbers) &&
+        _deepEquals(audioWavPath, other.audioWavPath) &&
+        _deepEquals(outPath, other.outPath) &&
+        _deepEquals(videoBitrate, other.videoBitrate) &&
+        _deepEquals(audioBitrate, other.audioBitrate);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'GuideVideoSpec(fps: $fps, width: $width, height: $height, totalFrames: $totalFrames, flashFrames: $flashFrames, beatNumbers: $beatNumbers, audioWavPath: $audioWavPath, outPath: $outPath, videoBitrate: $videoBitrate, audioBitrate: $audioBitrate)';
   }
 }
 
@@ -311,6 +453,9 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is MediaInfo) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
+    } else if (value is GuideVideoSpec) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -325,6 +470,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return LibraryTrack.decode(readValue(buffer)!);
       case 131:
         return MediaInfo.decode(readValue(buffer)!);
+      case 132:
+        return GuideVideoSpec.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -616,6 +763,32 @@ class AudioHostApi {
       pigeonVar_channelName,
       isNullValid: true,
     );
+  }
+
+  /// Encodes the guide video (M7): H.264 at [GuideVideoSpec.fps] constant
+  /// frame rate with the guide WAV as AAC audio, in an MPEG-4 container. Falls
+  /// back to 720 × 1280 if the encoder refuses the requested size (the result
+  /// says which size was written). Progress through AudioProgressApi (fraction
+  /// of totalFrames written). Fails with `disk_full`, `encode_failed`,
+  /// `cancelled`.
+  Future<MediaInfo> encodeGuideVideo(String jobId, GuideVideoSpec spec) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.encodeGuideVideo$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[jobId, spec],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as MediaInfo;
   }
 }
 

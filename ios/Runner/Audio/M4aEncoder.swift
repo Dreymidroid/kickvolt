@@ -241,11 +241,49 @@ enum M4aEncoder {
     let durationSeconds = duration.isNumeric ? max(0.0, duration.seconds) : 0.0
     let durationUs = Int64((durationSeconds * 1_000_000.0).rounded())
     let frameCount = Int64((durationSeconds * Double(rate)).rounded())
+
+    // M7: a video track (the guide video). Frames are counted by reading the
+    // track's compressed samples (no decoding).
+    let videoTracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+    guard let videoTrack = videoTracks.first else {
+      return MediaInfo(
+        sampleRate: rate,
+        channels: channels,
+        durationUs: durationUs,
+        frameCount: frameCount,
+        hasVideo: false
+      )
+    }
+    let size = (try? await videoTrack.load(.naturalSize)) ?? .zero
+    let range = try? await videoTrack.load(.timeRange)
+    let videoDurationUs = range.map { r -> Int64 in
+      r.duration.isNumeric ? Int64((r.duration.seconds * 1_000_000.0).rounded()) : 0
+    }
+    var videoFrames: Int64?
+    if let reader = try? AVAssetReader(asset: asset) {
+      let output = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
+      output.alwaysCopiesSampleData = false
+      if reader.canAdd(output) {
+        reader.add(output)
+        if reader.startReading() {
+          var count: Int64 = 0
+          while let sample = output.copyNextSampleBuffer() {
+            count += Int64(CMSampleBufferGetNumSamples(sample))
+          }
+          if reader.status == .completed { videoFrames = count }
+        }
+      }
+    }
     return MediaInfo(
       sampleRate: rate,
       channels: channels,
       durationUs: durationUs,
-      frameCount: frameCount
+      frameCount: frameCount,
+      hasVideo: true,
+      videoWidth: Int64(size.width.rounded()),
+      videoHeight: Int64(size.height.rounded()),
+      videoFrameCount: videoFrames,
+      videoDurationUs: videoDurationUs
     )
   }
 

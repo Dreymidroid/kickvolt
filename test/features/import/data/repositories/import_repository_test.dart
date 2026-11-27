@@ -105,6 +105,13 @@ class FakeAudioNative implements AudioNative {
   );
 
   @override
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  }) => throw UnimplementedError();
+
+  @override
   Future<int> saveToFiles(List<String> paths) async => paths.length;
 
   @override

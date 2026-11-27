@@ -142,6 +142,22 @@ final class AudioHostApiImpl: AudioHostApi {
     }
   }
 
+  // MARK: M7 Guide video
+
+  func encodeGuideVideo(jobId: String, spec: GuideVideoSpec) async throws -> MediaInfo {
+    let flag = CancelFlag()
+    setJob(jobId, flag)
+    defer { setJob(jobId, nil) }
+    let progressApi = self.progressApi
+    return try await GuideVideoEncoder.encode(spec: spec, cancel: flag) { fraction in
+      DispatchQueue.main.async {
+        Task { @MainActor in
+          try? await progressApi.onProgress(jobId: jobId, fraction: fraction)
+        }
+      }
+    }
+  }
+
   func probeMedia(path: String) async throws -> MediaInfo {
     try await M4aEncoder.probeMedia(url: URL(fileURLWithPath: path))
   }
