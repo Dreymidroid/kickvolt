@@ -48,6 +48,8 @@ class ExportView extends StatelessWidget {
             options: s.options,
             plan: s.plan,
             quota: s.quota,
+            videoAllowed: s.videoAllowed,
+            onVideoLocked: context.read<ExportCubit>().onVideoLocked,
           ),
           final ExportFailed s => Stack(
             children: [
@@ -56,6 +58,8 @@ class ExportView extends StatelessWidget {
                 options: s.options,
                 plan: s.plan,
                 quota: s.quota,
+                videoAllowed: s.videoAllowed,
+                onVideoLocked: context.read<ExportCubit>().onVideoLocked,
               ),
               ExportFailedSheet(failure: s.failure, options: s.options),
             ],

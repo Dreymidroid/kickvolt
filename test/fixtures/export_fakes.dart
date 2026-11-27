@@ -8,6 +8,7 @@ import 'package:kickvolt/features/projects/projects.dart';
 
 class FakeEntitlementService implements EntitlementService {
   bool allowed = true;
+  bool hasGuideVideo = true;
   ExportQuota quota = const ExportQuota.unlimited();
   int recordedCount = 0;
 
@@ -15,7 +16,8 @@ class FakeEntitlementService implements EntitlementService {
   Stream<Entitlements> get changes => const Stream.empty();
 
   @override
-  Future<Entitlements> current() async => const Entitlements();
+  Future<Entitlements> current() async =>
+      Entitlements(hasGuideVideo: hasGuideVideo);
 
   @override
   Future<ExportQuota> exportQuota() async => quota;
@@ -72,6 +74,9 @@ class FakeExportRepository implements ExportRepository {
             frameCount: f.frameCount,
             byteSize: f.estimatedWavBytes,
             clickCount: f.clickCount,
+            flashCount: f.kind == ExportFileKind.video
+                ? plan.guideVideo?.flashCount
+                : null,
           ),
       ],
     );
@@ -179,4 +184,11 @@ class FakeCubitAudioNative implements AudioNative {
 
   @override
   Future<MediaInfo> probeMedia(String path) => throw UnimplementedError();
+
+  @override
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  }) => throw UnimplementedError();
 }

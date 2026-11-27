@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -12,6 +13,7 @@ import 'package:kickvolt/features/projects/projects.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../fixtures/demo_project.dart';
+import '../../../../fixtures/export_fakes.dart' show FakeEntitlementService;
 
 class FakeExportAudioNative implements AudioNative {
   int freeBytes = 1 << 40;
@@ -19,6 +21,60 @@ class FakeExportAudioNative implements AudioNative {
   final encodedFiles =
       <({String jobId, String wavPath, String outPath, int bitrate})>[];
   final cancelledJobs = <String>[];
+
+  /// Ordered log of native work, e.g. `video:<wav name>` / `m4a:<wav name>`.
+  final events = <String>[];
+
+  // Guide video (M7).
+  final videoSpecs = <GuideVideoSpec>[];
+  final videoJobIds = <String>[];
+
+  /// Info about the guide WAV the video was given, read from disk.
+  final videoAudioInfo = <WavInfo>[];
+  AudioNativeException? videoError;
+
+  /// When set, encodeGuideVideo waits here until cancelled.
+  Completer<void>? videoGate;
+
+  /// Overrides what the fake MP4 reports (to test verification).
+  int videoFrameDelta = 0;
+
+  @override
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  }) async {
+    videoSpecs.add(spec);
+    videoJobIds.add(jobId);
+    events.add('video:${p.basename(spec.audioWavPath)}');
+    final info = await readWavInfo(File(spec.audioWavPath));
+    videoAudioInfo.add(info);
+    onProgress?.call(0.5);
+    final gate = videoGate;
+    if (gate != null) {
+      await gate.future;
+      if (cancelledJobs.contains(jobId)) {
+        throw const AudioNativeException(AudioErrorKind.cancelled, 'stop');
+      }
+    }
+    if (videoError != null) throw videoError!;
+    final out = File(spec.outPath);
+    await out.parent.create(recursive: true);
+    final frames = spec.totalFrames + videoFrameDelta;
+    final header = ByteData(28)
+      ..setUint32(0, 0x4D503421, Endian.little) // 'MP4!'
+      ..setUint32(4, info.sampleRate, Endian.little)
+      ..setUint32(8, info.channels, Endian.little)
+      ..setUint32(12, info.frameCount, Endian.little)
+      ..setUint32(16, frames, Endian.little)
+      ..setUint32(20, spec.width, Endian.little)
+      ..setUint32(24, spec.height, Endian.little);
+    await out.writeAsBytes(header.buffer.asUint8List());
+    onProgress?.call(1.0);
+    return probeMedia(spec.outPath);
+  }
+
   int bgTokensIssued = 0;
   final endedBgTokens = <int>[];
   int savedCountResult = 2;
@@ -38,6 +94,7 @@ class FakeExportAudioNative implements AudioNative {
       outPath: outPath,
       bitrate: bitrate,
     ));
+    events.add('m4a:${p.basename(wavPath)}');
     onProgress?.call(0.5);
     if (encodeError != null) throw encodeError!;
     final info = await readWavInfo(File(wavPath));
@@ -63,6 +120,20 @@ class FakeExportAudioNative implements AudioNative {
     final sr = bd.getUint32(4, Endian.little);
     final ch = bd.getUint32(8, Endian.little);
     final frames = bd.getUint32(12, Endian.little);
+    if (bd.getUint32(0, Endian.little) == 0x4D503421) {
+      final videoFrames = bd.getUint32(16, Endian.little);
+      return MediaInfo(
+        sampleRate: sr,
+        channels: ch,
+        durationUs: frames * 1000000 ~/ sr,
+        frameCount: frames,
+        hasVideo: true,
+        videoFrameCount: videoFrames,
+        videoDurationUs: (videoFrames * 1000000 + 29) ~/ 30,
+        videoWidth: bd.getUint32(20, Endian.little),
+        videoHeight: bd.getUint32(24, Endian.little),
+      );
+    }
     return MediaInfo(
       sampleRate: sr,
       channels: ch,
@@ -526,4 +597,251 @@ void main() {
       expect(remaining, createdDirs.sublist(2));
     },
   );
+
+  group('guide video (M7)', () {
+    Future<Project> songProject() async {
+      final project = makeProject();
+      await _writeSongWav(
+        path: paths.songWav(project.id),
+        sampleRate: project.sampleRate,
+        channels: project.channels,
+        frameCount: project.sampleCount,
+      );
+      return project;
+    }
+
+    Future<void> expectNoPackLeft(Project project) async {
+      final exportsDir = Directory(paths.exportsDir(project.id));
+      expect(
+        !await exportsDir.exists() ||
+            (await exportsDir.list().toList()).isEmpty,
+        isTrue,
+      );
+    }
+
+    test('not asked -> no video', () async {
+      final project = await songProject();
+      final pack = await repo.export(
+        project,
+        const ExportOptions(),
+        cancel: ExportCancelToken(),
+      );
+      expect(audio.videoSpecs, isEmpty);
+      expect(pack.files.any((f) => f.kind == ExportFileKind.video), isFalse);
+    });
+
+    test('asked but not entitled -> no video', () async {
+      final project = await songProject();
+      final entitlements = FakeEntitlementService()..hasGuideVideo = false;
+      final gated = ExportRepositoryImpl(
+        audio: audio,
+        paths: () async => paths,
+        entitlements: entitlements,
+      );
+      final pack = await gated.export(
+        project,
+        const ExportOptions(includeVideo: true),
+        cancel: ExportCancelToken(),
+      );
+      expect(audio.videoSpecs, isEmpty);
+      expect(pack.files.map((f) => f.kind), [
+        ExportFileKind.guide,
+        ExportFileKind.song,
+      ]);
+    });
+
+    test('WAV pack: spec equals planGuideVideo and points at the rendered '
+        'guide WAV', () async {
+      final project = await songProject();
+      final progress = <ExportProgress>[];
+      final pack = await repo.export(
+        project,
+        const ExportOptions(includeVideo: true),
+        cancel: ExportCancelToken(),
+        onProgress: progress.add,
+      );
+
+      expect(audio.videoSpecs, hasLength(1));
+      final spec = audio.videoSpecs.single;
+      final expectedPlan = planGuideVideo(
+        sampleRate: project.sampleRate,
+        frameCount: project.sampleCount,
+        visibleBeatSamples: [for (final b in project.beats) b.sample],
+      );
+      expect(spec.fps, 30);
+      expect(spec.width, 1080);
+      expect(spec.height, 1920);
+      expect(spec.totalFrames, expectedPlan.totalFrames);
+      expect(spec.totalFrames, 60);
+      expect(spec.flashFrames, expectedPlan.flashFrames);
+      expect(spec.flashFrames, [7, 15, 30]);
+      expect(spec.beatNumbers, [1, 2, 3]);
+      expect(spec.videoBitrate, kGuideVideoBitrate);
+      expect(spec.audioBitrate, kGuideVideoAudioBitrate);
+
+      // The audio is the rendered guide track (staged), read back from disk
+      // when the encoder was called: same rate and frames as the song.
+      expect(p.basename(spec.audioWavPath), 'MidnightRun_beats.wav.part');
+      final guideInfo = audio.videoAudioInfo.single;
+      expect(guideInfo.sampleRate, project.sampleRate);
+      expect(guideInfo.frameCount, project.sampleCount);
+      expect(guideInfo.channels, 2);
+      expect(p.basename(spec.outPath), 'MidnightRun_guide.mp4.part');
+
+      expect(pack.files.map((f) => f.displayName), [
+        'MidnightRun_beats.wav',
+        'MidnightRun_guide.mp4',
+        'MidnightRun_song.wav',
+      ]);
+      final video = pack.files[1];
+      expect(video.kind, ExportFileKind.video);
+      expect(video.flashCount, 3);
+      expect(await File(video.path).exists(), isTrue);
+      final names = [
+        for (final e in await Directory(pack.directoryPath).list().toList())
+          p.basename(e.path),
+      ]..sort();
+      expect(names, [
+        'MidnightRun_beats.wav',
+        'MidnightRun_guide.mp4',
+        'MidnightRun_song.wav',
+      ]);
+      expect(progress.last.overallFraction, 1.0);
+    });
+
+    test(
+      'M4A pack order: guide WAV -> video -> guide M4A -> WAV deleted',
+      () async {
+        final project = await songProject();
+        final pack = await repo.export(
+          project,
+          const ExportOptions(includeVideo: true, format: AudioFormat.m4a),
+          cancel: ExportCancelToken(),
+        );
+        expect(audio.events, [
+          'video:_transient_guide.wav',
+          'm4a:_transient_guide.wav',
+          'm4a:song.wav',
+        ]);
+        expect(audio.videoAudioInfo.single.frameCount, project.sampleCount);
+        final names = [
+          for (final e in await Directory(pack.directoryPath).list().toList())
+            p.basename(e.path),
+        ]..sort();
+        expect(names, [
+          'MidnightRun_beats.m4a',
+          'MidnightRun_guide.mp4',
+          'MidnightRun_song.m4a',
+        ]);
+      },
+    );
+
+    test('encode_failed on the video -> failure offering export without '
+        'video; pack folder removed', () async {
+      final project = await songProject();
+      audio.videoError = const AudioNativeException(
+        AudioErrorKind.encodeFailed,
+        'No H.264 encoder',
+      );
+      await expectLater(
+        repo.export(
+          project,
+          const ExportOptions(includeVideo: true),
+          cancel: ExportCancelToken(),
+        ),
+        throwsA(
+          isA<ExportFailureException>()
+              .having(
+                (e) => e.failure.kind,
+                'kind',
+                ExportFailureKind.encodeFailed,
+              )
+              .having((e) => e.failure.isVideoFailure, 'isVideoFailure', isTrue)
+              .having(
+                (e) => e.failure.message,
+                'message',
+                'This phone couldn’t make the guide video. Export without it?',
+              ),
+        ),
+      );
+      await expectNoPackLeft(project);
+    });
+
+    test('a video that fails verification is an encode failure', () async {
+      final project = await songProject();
+      audio.videoFrameDelta = 1;
+      await expectLater(
+        repo.export(
+          project,
+          const ExportOptions(includeVideo: true),
+          cancel: ExportCancelToken(),
+        ),
+        throwsA(
+          isA<ExportFailureException>().having(
+            (e) => e.failure.isVideoFailure,
+            'isVideoFailure',
+            isTrue,
+          ),
+        ),
+      );
+      await expectNoPackLeft(project);
+    });
+
+    test('cancel during the video cancels the native job and removes the '
+        'pack folder', () async {
+      final project = await songProject();
+      final gate = Completer<void>();
+      audio.videoGate = gate;
+      final token = ExportCancelToken();
+      final future = repo.export(
+        project,
+        const ExportOptions(includeVideo: true),
+        cancel: token,
+        onProgress: (p) {
+          if (audio.videoSpecs.isNotEmpty && !token.isCancelled) {
+            // The video job is running (it reported 0.5): cancel now.
+            unawaited(token.cancel().then((_) => gate.complete()));
+          }
+        },
+      );
+      await expectLater(future, throwsA(isA<ExportCancelledException>()));
+      expect(audio.videoJobIds, hasLength(1));
+      expect(audio.cancelledJobs, contains(audio.videoJobIds.single));
+      await expectNoPackLeft(project);
+      await Directory(paths.projectDir(project.id)).delete(recursive: true);
+    });
+
+    test('verification helper: duration within one frame of the song', () {
+      final plan = planGuideVideo(
+        sampleRate: 44100,
+        frameCount: 44100 + 1,
+        visibleBeatSamples: const [0],
+      );
+      MediaInfo info({int? videoUs, int? frames, bool video = true}) =>
+          MediaInfo(
+            sampleRate: 44100,
+            channels: 2,
+            durationUs: 1000000,
+            hasVideo: video,
+            videoFrameCount: frames ?? plan.totalFrames,
+            videoDurationUs: videoUs ?? plan.durationUs,
+          );
+      String? check(MediaInfo m) => guideVideoVerificationProblem(
+        m,
+        plan: plan,
+        sampleRate: 44100,
+        frameCount: 44101,
+        guideChannels: 2,
+      );
+      expect(plan.totalFrames, 31);
+      expect(check(info()), isNull);
+      // Song = 1,000,022.7 µs; one frame = 33,334 µs.
+      expect(check(info(videoUs: 1000022 + 33334)), isNull);
+      expect(check(info(videoUs: 1000023 + 33334)), isNotNull);
+      expect(check(info(videoUs: 1000023 - 33334)), isNull);
+      expect(check(info(videoUs: 1000022 - 33334)), isNotNull);
+      expect(check(info(frames: 30)), isNotNull);
+      expect(check(info(video: false)), isNotNull);
+    });
+  });
 }

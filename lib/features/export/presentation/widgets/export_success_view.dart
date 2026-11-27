@@ -24,6 +24,14 @@ class ExportSuccessView extends StatelessWidget {
   String _detail(ExportedFile f) {
     final duration = formatDuration(state.pack.durationMs);
     final label = f.kind.displayLabel;
+    if (f.kind == ExportFileKind.video) {
+      final n = f.flashCount ?? 0;
+      // The encoder fell back to 720 × 1280 (M7 §4.3): say so.
+      final size = f.videoWidth != null && f.videoWidth! < 1080
+          ? ' · ${f.videoWidth}×${f.videoHeight}'
+          : '';
+      return '$label · $n ${n == 1 ? 'flash' : 'flashes'}$size · ${_size(f.byteSize)}';
+    }
     final base = f.clickCount == null
         ? '$label · $duration'
         : '$label · ${f.clickCount} ${f.clickCount == 1 ? 'click' : 'clicks'}';
@@ -118,7 +126,9 @@ class ExportSuccessView extends StatelessWidget {
                           ),
                           alignment: Alignment.center,
                           child: KvIcon(
-                            f.kind == ExportFileKind.guide
+                            f.kind == ExportFileKind.video
+                                ? KvIcons.video
+                                : f.kind == ExportFileKind.guide
                                 ? KvIcons.bolt
                                 : f.kind == ExportFileKind.preview
                                 ? KvIcons.volume

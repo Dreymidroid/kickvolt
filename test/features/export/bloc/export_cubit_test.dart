@@ -154,4 +154,70 @@ void main() {
       expect(entitlements.recordedCount, 0);
     },
   );
+
+  group('guide video (M7)', () {
+    test('toggle allowed with hasGuideVideo; plan gains the MP4', () async {
+      await cubit.load('demo');
+      final s0 = cubit.state as ExportEditing;
+      expect(s0.videoAllowed, isTrue);
+      expect(s0.options.includeVideo, isFalse);
+
+      cubit.setIncludeVideo(true);
+      final s1 = cubit.state as ExportEditing;
+      expect(s1.options.includeVideo, isTrue);
+      expect(s1.plan.files.map((f) => f.fileName), [
+        'MidnightRun_beats.wav',
+        'MidnightRun_guide.mp4',
+        'MidnightRun_song.wav',
+      ]);
+      expect(s1.plan.guideVideo, isNotNull);
+
+      await cubit.startExport();
+      expect(exportRepo.calls.single.options.includeVideo, isTrue);
+    });
+
+    test('starts from the "Guide video in packs" setting', () async {
+      await settingsRepo.save(const AppSettings(includeVideoByDefault: true));
+      await cubit.load('demo');
+      expect((cubit.state as ExportEditing).options.includeVideo, isTrue);
+    });
+
+    test('without hasGuideVideo: row disabled, toggle ignored, onLocked is '
+        'a no-op, setting ignored', () async {
+      entitlements.hasGuideVideo = false;
+      await settingsRepo.save(const AppSettings(includeVideoByDefault: true));
+      await cubit.load('demo');
+      final s0 = cubit.state as ExportEditing;
+      expect(s0.videoAllowed, isFalse);
+      expect(s0.options.includeVideo, isFalse);
+
+      cubit.setIncludeVideo(true);
+      cubit.onVideoLocked();
+      final s1 = cubit.state as ExportEditing;
+      expect(s1.options.includeVideo, isFalse);
+      expect(s1.plan.guideVideo, isNull);
+    });
+
+    test('video failure -> retry without video', () async {
+      await cubit.load('demo');
+      cubit.setIncludeVideo(true);
+      exportRepo.nextFailure = const ExportFailure(
+        kind: ExportFailureKind.encodeFailed,
+        failedFile: ExportFileKind.video,
+      );
+      await cubit.startExport();
+      final failed = cubit.state as ExportFailed;
+      expect(failed.failure.isVideoFailure, isTrue);
+      expect(failed.videoAllowed, isTrue);
+
+      await cubit.retryWithoutVideo();
+      expect(exportRepo.calls, hasLength(2));
+      expect(exportRepo.calls.last.options.includeVideo, isFalse);
+      final done = cubit.state as ExportDone;
+      expect(
+        done.pack.files.any((f) => f.kind == ExportFileKind.video),
+        isFalse,
+      );
+    });
+  });
 }

@@ -132,14 +132,14 @@ return done(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( String message)?  error,TResult Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)?  editing,TResult Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)?  exporting,TResult Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)?  failed,TResult Function( BeatPack pack,  bool saved)?  done,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loading,TResult Function( String message)?  error,TResult Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)?  editing,TResult Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)?  exporting,TResult Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)?  failed,TResult Function( BeatPack pack,  bool saved)?  done,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ExportLoading() when loading != null:
 return loading();case ExportError() when error != null:
 return error(_that.message);case ExportEditing() when editing != null:
-return editing(_that.project,_that.options,_that.plan,_that.quota);case ExportExporting() when exporting != null:
+return editing(_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportExporting() when exporting != null:
 return exporting(_that.options,_that.plan,_that.progress);case ExportFailed() when failed != null:
-return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota);case ExportDone() when done != null:
+return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportDone() when done != null:
 return done(_that.pack,_that.saved);case _:
   return orElse();
 
@@ -158,14 +158,14 @@ return done(_that.pack,_that.saved);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( String message)  error,required TResult Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)  editing,required TResult Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)  exporting,required TResult Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)  failed,required TResult Function( BeatPack pack,  bool saved)  done,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loading,required TResult Function( String message)  error,required TResult Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)  editing,required TResult Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)  exporting,required TResult Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)  failed,required TResult Function( BeatPack pack,  bool saved)  done,}) {final _that = this;
 switch (_that) {
 case ExportLoading():
 return loading();case ExportError():
 return error(_that.message);case ExportEditing():
-return editing(_that.project,_that.options,_that.plan,_that.quota);case ExportExporting():
+return editing(_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportExporting():
 return exporting(_that.options,_that.plan,_that.progress);case ExportFailed():
-return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota);case ExportDone():
+return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportDone():
 return done(_that.pack,_that.saved);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -180,14 +180,14 @@ return done(_that.pack,_that.saved);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( String message)?  error,TResult? Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)?  editing,TResult? Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)?  exporting,TResult? Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota)?  failed,TResult? Function( BeatPack pack,  bool saved)?  done,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loading,TResult? Function( String message)?  error,TResult? Function( Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)?  editing,TResult? Function( ExportOptions options,  BeatPackPlan plan,  ExportProgress progress)?  exporting,TResult? Function( ExportFailure failure,  Project project,  ExportOptions options,  BeatPackPlan plan,  ExportQuota quota,  bool videoAllowed)?  failed,TResult? Function( BeatPack pack,  bool saved)?  done,}) {final _that = this;
 switch (_that) {
 case ExportLoading() when loading != null:
 return loading();case ExportError() when error != null:
 return error(_that.message);case ExportEditing() when editing != null:
-return editing(_that.project,_that.options,_that.plan,_that.quota);case ExportExporting() when exporting != null:
+return editing(_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportExporting() when exporting != null:
 return exporting(_that.options,_that.plan,_that.progress);case ExportFailed() when failed != null:
-return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota);case ExportDone() when done != null:
+return failed(_that.failure,_that.project,_that.options,_that.plan,_that.quota,_that.videoAllowed);case ExportDone() when done != null:
 return done(_that.pack,_that.saved);case _:
   return null;
 
@@ -300,13 +300,16 @@ as String,
 
 
 class ExportEditing implements ExportState {
-  const ExportEditing({required this.project, required this.options, required this.plan, required this.quota});
+  const ExportEditing({required this.project, required this.options, required this.plan, required this.quota, this.videoAllowed = true});
   
 
  final  Project project;
  final  ExportOptions options;
  final  BeatPackPlan plan;
  final  ExportQuota quota;
+/// `Entitlements.hasGuideVideo`: the Guide video row is a toggle when
+/// true, a locked row otherwise (M7 §6).
+@JsonKey() final  bool videoAllowed;
 
 /// Create a copy of ExportState
 /// with the given fields replaced by the non-null parameter values.
@@ -318,18 +321,18 @@ $ExportEditingCopyWith<ExportEditing> get copyWith => _$ExportEditingCopyWithImp
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportEditing&&(identical(other.project, project) || other.project == project)&&(identical(other.options, options) || other.options == options)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.quota, quota) || other.quota == quota));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportEditing&&(identical(other.project, project) || other.project == project)&&(identical(other.options, options) || other.options == options)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.quota, quota) || other.quota == quota)&&(identical(other.videoAllowed, videoAllowed) || other.videoAllowed == videoAllowed));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,project,options,plan,quota);
+    return Object.hash(runtimeType,project,options,plan,quota,videoAllowed);
 }
 
 @override
 String toString() {
-    return 'ExportState.editing(project: $project, options: $options, plan: $plan, quota: $quota)';
+    return 'ExportState.editing(project: $project, options: $options, plan: $plan, quota: $quota, videoAllowed: $videoAllowed)';
 }
 
 
@@ -340,7 +343,7 @@ abstract mixin class $ExportEditingCopyWith<$Res> implements $ExportStateCopyWit
   factory $ExportEditingCopyWith(ExportEditing value, $Res Function(ExportEditing) _then) = _$ExportEditingCopyWithImpl;
 @useResult
 $Res call({
- Project project, ExportOptions options, BeatPackPlan plan, ExportQuota quota
+ Project project, ExportOptions options, BeatPackPlan plan, ExportQuota quota, bool videoAllowed
 });
 
 
@@ -357,13 +360,14 @@ class _$ExportEditingCopyWithImpl<$Res>
 
 /// Create a copy of ExportState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? options = null,Object? plan = null,Object? quota = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? project = null,Object? options = null,Object? plan = null,Object? quota = null,Object? videoAllowed = null,}) {
   return _then(ExportEditing(
 project: null == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
 as Project,options: null == options ? _self.options : options // ignore: cast_nullable_to_non_nullable
 as ExportOptions,plan: null == plan ? _self.plan : plan // ignore: cast_nullable_to_non_nullable
 as BeatPackPlan,quota: null == quota ? _self.quota : quota // ignore: cast_nullable_to_non_nullable
-as ExportQuota,
+as ExportQuota,videoAllowed: null == videoAllowed ? _self.videoAllowed : videoAllowed // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -455,7 +459,7 @@ as ExportProgress,
 
 
 class ExportFailed implements ExportState {
-  const ExportFailed({required this.failure, required this.project, required this.options, required this.plan, required this.quota});
+  const ExportFailed({required this.failure, required this.project, required this.options, required this.plan, required this.quota, this.videoAllowed = true});
   
 
  final  ExportFailure failure;
@@ -463,6 +467,7 @@ class ExportFailed implements ExportState {
  final  ExportOptions options;
  final  BeatPackPlan plan;
  final  ExportQuota quota;
+@JsonKey() final  bool videoAllowed;
 
 /// Create a copy of ExportState
 /// with the given fields replaced by the non-null parameter values.
@@ -474,18 +479,18 @@ $ExportFailedCopyWith<ExportFailed> get copyWith => _$ExportFailedCopyWithImpl<E
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportFailed&&(identical(other.failure, failure) || other.failure == failure)&&(identical(other.project, project) || other.project == project)&&(identical(other.options, options) || other.options == options)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.quota, quota) || other.quota == quota));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportFailed&&(identical(other.failure, failure) || other.failure == failure)&&(identical(other.project, project) || other.project == project)&&(identical(other.options, options) || other.options == options)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.quota, quota) || other.quota == quota)&&(identical(other.videoAllowed, videoAllowed) || other.videoAllowed == videoAllowed));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,failure,project,options,plan,quota);
+    return Object.hash(runtimeType,failure,project,options,plan,quota,videoAllowed);
 }
 
 @override
 String toString() {
-    return 'ExportState.failed(failure: $failure, project: $project, options: $options, plan: $plan, quota: $quota)';
+    return 'ExportState.failed(failure: $failure, project: $project, options: $options, plan: $plan, quota: $quota, videoAllowed: $videoAllowed)';
 }
 
 
@@ -496,7 +501,7 @@ abstract mixin class $ExportFailedCopyWith<$Res> implements $ExportStateCopyWith
   factory $ExportFailedCopyWith(ExportFailed value, $Res Function(ExportFailed) _then) = _$ExportFailedCopyWithImpl;
 @useResult
 $Res call({
- ExportFailure failure, Project project, ExportOptions options, BeatPackPlan plan, ExportQuota quota
+ ExportFailure failure, Project project, ExportOptions options, BeatPackPlan plan, ExportQuota quota, bool videoAllowed
 });
 
 
@@ -513,14 +518,15 @@ class _$ExportFailedCopyWithImpl<$Res>
 
 /// Create a copy of ExportState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? failure = null,Object? project = null,Object? options = null,Object? plan = null,Object? quota = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? failure = null,Object? project = null,Object? options = null,Object? plan = null,Object? quota = null,Object? videoAllowed = null,}) {
   return _then(ExportFailed(
 failure: null == failure ? _self.failure : failure // ignore: cast_nullable_to_non_nullable
 as ExportFailure,project: null == project ? _self.project : project // ignore: cast_nullable_to_non_nullable
 as Project,options: null == options ? _self.options : options // ignore: cast_nullable_to_non_nullable
 as ExportOptions,plan: null == plan ? _self.plan : plan // ignore: cast_nullable_to_non_nullable
 as BeatPackPlan,quota: null == quota ? _self.quota : quota // ignore: cast_nullable_to_non_nullable
-as ExportQuota,
+as ExportQuota,videoAllowed: null == videoAllowed ? _self.videoAllowed : videoAllowed // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

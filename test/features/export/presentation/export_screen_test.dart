@@ -1,3 +1,4 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kickvolt/app/app_theme.dart';
@@ -72,9 +73,10 @@ void main() {
       expect(find.text('Midnight Run'), findsOneWidget);
       expect(find.textContaining('358 beats'), findsOneWidget);
 
-      // Guide video shows Coming soon and NO PRO badge.
+      // Guide video is a toggle (M7), off by default, with NO PRO badge.
       expect(find.text('Guide video'), findsOneWidget);
-      expect(find.text('Coming soon'), findsOneWidget);
+      expect(find.text('Coming soon'), findsNothing);
+      expect(find.bySemanticsLabel('Include guide video'), findsOneWidget);
       expect(find.text('PRO'), findsNothing);
 
       // Default format is WAV: no M4A warning, WAV file names in list.
@@ -288,4 +290,119 @@ void main() {
       expect(find.text('Saved 2 files'), findsOneWidget);
     },
   );
+
+  group('guide video (M7)', () {
+    testWidgets('video row on/off updates the file list and button', (
+      tester,
+    ) async {
+      setPhoneSize(tester);
+      await cubit.load('demo');
+      await tester.pumpWidget(_wrap(cubit));
+
+      expect(find.text('MidnightRun_guide.mp4'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Include guide video'));
+      await tester.pump();
+      expect((cubit.state as ExportEditing).options.includeVideo, isTrue);
+      expect(find.text('MidnightRun_guide.mp4'), findsOneWidget);
+      expect(find.textContaining('358 flashes'), findsOneWidget);
+      expect(find.text('Export 3 files'), findsOneWidget);
+      expect(find.text('PRO'), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Include guide video'));
+      await tester.pump();
+      expect(find.text('MidnightRun_guide.mp4'), findsNothing);
+      expect(find.text('Export 2 files'), findsOneWidget);
+    });
+
+    testWidgets('locked row: disabled, tap calls onLocked, no PRO / paywall', (
+      tester,
+    ) async {
+      setPhoneSize(tester);
+      entitlements.hasGuideVideo = false;
+      await cubit.load('demo');
+      final s = cubit.state as ExportEditing;
+      expect(s.videoAllowed, isFalse);
+      var lockedTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.dark(),
+          home: Scaffold(
+            body: BlocProvider.value(
+              value: cubit,
+              child: ExportOptionsView(
+                project: s.project,
+                options: s.options,
+                plan: s.plan,
+                quota: s.quota,
+                videoAllowed: s.videoAllowed,
+                onVideoLocked: () => lockedTaps++,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Guide video'));
+      await tester.pump();
+      expect(lockedTaps, 1);
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.label == 'Include guide video',
+        ),
+      );
+      await tester.pump();
+      expect(lockedTaps, 2);
+      expect((cubit.state as ExportEditing).options.includeVideo, isFalse);
+      expect(find.text('MidnightRun_guide.mp4'), findsNothing);
+      expect(find.text('PRO'), findsNothing);
+      expect(find.textContaining('Pro'), findsNothing);
+    });
+
+    testWidgets('video failure: copy and "Export without video"', (
+      tester,
+    ) async {
+      setPhoneSize(tester);
+      await cubit.load('demo');
+      cubit.setIncludeVideo(true);
+      await tester.pumpWidget(_wrap(cubit));
+      exportRepo.nextFailure = const ExportFailure(
+        kind: ExportFailureKind.encodeFailed,
+        failedFile: ExportFileKind.video,
+      );
+      await cubit.startExport();
+      await tester.pump();
+
+      expect(
+        find.text(
+          'This phone couldn’t make the guide video. Export without it?',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Switch to WAV and retry'), findsNothing);
+      expect(find.text('Try again'), findsNothing);
+      await tester.tap(find.text('Export without video'));
+      await tester.pump();
+      expect(exportRepo.calls.last.options.includeVideo, isFalse);
+      expect(find.text('Beat pack ready'), findsOneWidget);
+    });
+
+    testWidgets('ExportSuccess lists the MP4 with its flash count', (
+      tester,
+    ) async {
+      setPhoneSize(tester);
+      await cubit.load('demo');
+      cubit.setIncludeVideo(true);
+      await cubit.startExport();
+      await tester.pumpWidget(_wrap(cubit));
+
+      expect(find.text('MidnightRun_guide.mp4'), findsOneWidget);
+      expect(find.textContaining('Guide video · 358 flashes'), findsOneWidget);
+      await tester.tap(find.text('Share'));
+      await tester.pump();
+      expect(
+        shareService.sharedBatches.single,
+        contains('/fake/exports/20261126-120000/MidnightRun_guide.mp4'),
+      );
+    });
+  });
 }

@@ -78,6 +78,7 @@ void setupLocator() {
     () => ExportRepositoryImpl(
       audio: locator<AudioNative>(),
       paths: () => locator<Future<ProjectPaths>>(),
+      entitlements: locator<EntitlementService>(),
     ),
   );
 }
