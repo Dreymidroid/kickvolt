@@ -55,18 +55,17 @@ void main() {
 
   group('AudioNativeClient M6 methods', () {
     test('encodeM4a forwards progress and returns MediaInfo', () async {
-      when(
-        () => host.encodeM4a('job-1', '/in.wav', '/out.m4a', 192000),
-      ).thenAnswer((_) async {
-        client.onProgress('job-1', 0.25);
-        client.onProgress('job-1', 0.75);
-        return MediaInfo(
-          sampleRate: 44100,
-          channels: 2,
-          durationUs: 1000000,
-          frameCount: 44100,
-        );
-      });
+      when(() => host.encodeM4a('job-1', '/in.wav', '/out.m4a', 192000))
+          .thenAnswer((_) async {
+            client.onProgress('job-1', 0.25);
+            client.onProgress('job-1', 0.75);
+            return MediaInfo(
+              sampleRate: 44100,
+              channels: 2,
+              durationUs: 1000000,
+              frameCount: 44100,
+            );
+          });
 
       final progress = <double>[];
       final info = await client.encodeM4a(
@@ -84,9 +83,7 @@ void main() {
     });
 
     test('encodeM4a maps PlatformException(encode_failed) to typed AudioNativeException', () async {
-      when(
-        () => host.encodeM4a(any(), any(), any(), any()),
-      ).thenThrow(
+      when(() => host.encodeM4a(any(), any(), any(), any())).thenThrow(
         PlatformException(code: 'encode_failed', message: 'Unsupported rate'),
       );
 
@@ -105,12 +102,10 @@ void main() {
     });
 
     test('encodeM4a maps disk_full and cancelled PlatformExceptions', () async {
-      when(
-        () => host.encodeM4a('job-disk', any(), any(), any()),
-      ).thenThrow(PlatformException(code: 'disk_full', message: 'ENOSPC'));
-      when(
-        () => host.encodeM4a('job-cancel', any(), any(), any()),
-      ).thenThrow(PlatformException(code: 'cancelled', message: 'Stopped'));
+      when(() => host.encodeM4a('job-disk', any(), any(), any()))
+          .thenThrow(PlatformException(code: 'disk_full', message: 'ENOSPC'));
+      when(() => host.encodeM4a('job-cancel', any(), any(), any()))
+          .thenThrow(PlatformException(code: 'cancelled', message: 'Stopped'));
 
       await expectLater(
         client.encodeM4a(
@@ -152,12 +147,10 @@ void main() {
           frameCount: 96000,
         ),
       );
-      when(() => host.saveToFiles(['/a.wav', '/b.wav'])).thenAnswer(
-        (_) async => 2,
-      );
-      when(() => host.beginBackgroundWork('export')).thenAnswer(
-        (_) async => 42,
-      );
+      when(() => host.saveToFiles(['/a.wav', '/b.wav']))
+          .thenAnswer((_) async => 2);
+      when(() => host.beginBackgroundWork('export'))
+          .thenAnswer((_) async => 42);
       when(() => host.endBackgroundWork(42)).thenAnswer((_) async {});
 
       final info = await client.probeMedia('/song.m4a');

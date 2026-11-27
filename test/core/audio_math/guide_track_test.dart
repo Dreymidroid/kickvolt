@@ -94,145 +94,132 @@ void main() {
   });
 
   final fixtures = [
-    (
-      name: '44.1 kHz stereo (3 s)',
-      rate: 44100,
-      songCh: 2,
-      frames: 44100 * 3,
-    ),
-    (
-      name: '48 kHz mono (3 s)',
-      rate: 48000,
-      songCh: 1,
-      frames: 48000 * 3,
-    ),
+    (name: '44.1 kHz stereo (3 s)', rate: 44100, songCh: 2, frames: 44100 * 3),
+    (name: '48 kHz mono (3 s)', rate: 48000, songCh: 1, frames: 48000 * 3),
     (
       name: '44.1 kHz stereo odd length (1 s + 1 frame = 44101)',
       rate: 44100,
       songCh: 2,
       frames: 44101,
     ),
-    (
-      name: '22.05 kHz mono (3 s)',
-      rate: 22050,
-      songCh: 1,
-      frames: 22050 * 3,
-    ),
+    (name: '22.05 kHz mono (3 s)', rate: 22050, songCh: 1, frames: 22050 * 3),
   ];
 
   for (final fx in fixtures) {
     for (final guideCh in [2, 1]) {
-      test(
-        'Song and guide track have identical sample counts & exact click '
-        'positions: ${fx.name}, guideCh=$guideCh',
-        () async {
-          final songPath = '${tempDir.path}${Platform.pathSeparator}song.wav';
-          final guidePath = '${tempDir.path}${Platform.pathSeparator}guide.wav';
-          final previewPath =
-              '${tempDir.path}${Platform.pathSeparator}preview.wav';
-          await _writeFadedSongWav(
-            path: songPath,
-            sampleRate: fx.rate,
-            channels: fx.songCh,
-            frameCount: fx.frames,
-          );
+      test('Song and guide track have identical sample counts & exact click '
+          'positions: ${fx.name}, guideCh=$guideCh', () async {
+        final songPath = '${tempDir.path}${Platform.pathSeparator}song.wav';
+        final guidePath = '${tempDir.path}${Platform.pathSeparator}guide.wav';
+        final previewPath =
+            '${tempDir.path}${Platform.pathSeparator}preview.wav';
+        await _writeFadedSongWav(
+          path: songPath,
+          sampleRate: fx.rate,
+          channels: fx.songCh,
+          frameCount: fx.frames,
+        );
 
-          final beat0 = (fx.rate * 0.25).round();
-          final beat1 = (fx.rate * 0.50).round();
-          final beat2 = (fx.rate * 0.75).round();
-          final beat3 = fx.frames > fx.rate * 2
-              ? (fx.rate * 1.50).round()
-              : (fx.rate * 0.90).round();
+        final beat0 = (fx.rate * 0.25).round();
+        final beat1 = (fx.rate * 0.50).round();
+        final beat2 = (fx.rate * 0.75).round();
+        final beat3 = fx.frames > fx.rate * 2
+            ? (fx.rate * 1.50).round()
+            : (fx.rate * 0.90).round();
 
-          final stats = await renderGuideTrack(
-            songWavPath: songPath,
-            outputWavPath: guidePath,
-            beatSamples: [beat0, beat1, beat2, beat3],
-            style: ClickStyle.snap,
-            channels: guideCh,
-          );
+        final stats = await renderGuideTrack(
+          songWavPath: songPath,
+          outputWavPath: guidePath,
+          beatSamples: [beat0, beat1, beat2, beat3],
+          style: ClickStyle.snap,
+          channels: guideCh,
+        );
 
-          final previewStats = await renderPreviewMix(
-            songWavPath: songPath,
-            outputWavPath: previewPath,
-            beatSamples: [beat0, beat1, beat2, beat3],
-            style: ClickStyle.snap,
-          );
+        final previewStats = await renderPreviewMix(
+          songWavPath: songPath,
+          outputWavPath: previewPath,
+          beatSamples: [beat0, beat1, beat2, beat3],
+          style: ClickStyle.snap,
+        );
 
-          final songInfo = await readWavInfo(File(songPath));
-          final guideInfo = await readWavInfo(File(guidePath));
-          final previewInfo = await readWavInfo(File(previewPath));
+        final songInfo = await readWavInfo(File(songPath));
+        final guideInfo = await readWavInfo(File(guidePath));
+        final previewInfo = await readWavInfo(File(previewPath));
 
-          // Identical sample rate and frame count read back from disk.
-          expect(guideInfo.sampleRate, songInfo.sampleRate);
-          expect(guideInfo.frameCount, songInfo.frameCount);
-          expect(guideInfo.channels, guideCh);
-          expect(guideInfo.bitsPerSample, 16);
-          expect(stats.sampleRate, songInfo.sampleRate);
-          expect(stats.frameCount, songInfo.frameCount);
-          expect(stats.channels, guideCh);
+        // Identical sample rate and frame count read back from disk.
+        expect(guideInfo.sampleRate, songInfo.sampleRate);
+        expect(guideInfo.frameCount, songInfo.frameCount);
+        expect(guideInfo.channels, guideCh);
+        expect(guideInfo.bitsPerSample, 16);
+        expect(stats.sampleRate, songInfo.sampleRate);
+        expect(stats.frameCount, songInfo.frameCount);
+        expect(stats.channels, guideCh);
 
-          expect(previewInfo.sampleRate, songInfo.sampleRate);
-          expect(previewInfo.frameCount, songInfo.frameCount);
-          expect(previewInfo.channels, songInfo.channels);
-          expect(previewStats.frameCount, songInfo.frameCount);
+        expect(previewInfo.sampleRate, songInfo.sampleRate);
+        expect(previewInfo.frameCount, songInfo.frameCount);
+        expect(previewInfo.channels, songInfo.channels);
+        expect(previewStats.frameCount, songInfo.frameCount);
 
-          final pcm = await _readAllPcm(guidePath);
-          final clickLen = renderClick(ClickStyle.snap, fx.rate).length;
+        final pcm = await _readAllPcm(guidePath);
+        final clickLen = renderClick(ClickStyle.snap, fx.rate).length;
 
-          // Silence before first beat.
-          for (var f = 0; f < beat0; f++) {
+        // Silence before first beat.
+        for (var f = 0; f < beat0; f++) {
+          for (var c = 0; c < guideCh; c++) {
+            expect(pcm[f * guideCh + c], 0);
+          }
+        }
+
+        final beats = [beat0, beat1, beat2, beat3];
+        for (var bIdx = 0; bIdx < beats.length; bIdx++) {
+          final b = beats[bIdx];
+          // First non-zero sample at or after beat - 1 is EXACTLY beat.
+          final searchStart = math.max(0, b - 1);
+          int? firstNonZero;
+          for (
+            var f = searchStart;
+            f < math.min(fx.frames, b + clickLen);
+            f++
+          ) {
+            if (pcm[f * guideCh] != 0) {
+              firstNonZero = f;
+              break;
+            }
+          }
+          expect(firstNonZero, b, reason: 'Beat at $b onset must be exact');
+
+          // Same click on every channel & peak of isolated click within -3 dBFS ±0.1 dB.
+          var maxAbs = 0;
+          final clickEnd = math.min(fx.frames, b + clickLen);
+          for (var f = b; f < clickEnd; f++) {
+            final s0 = pcm[f * guideCh];
+            if (s0.abs() > maxAbs) maxAbs = s0.abs();
+            for (var c = 1; c < guideCh; c++) {
+              expect(
+                pcm[f * guideCh + c],
+                s0,
+                reason: 'Channel $c must match channel 0 at frame $f',
+              );
+            }
+          }
+          final dbfs = _peakDbfs(maxAbs);
+          expect(dbfs, closeTo(-3.0, 0.1));
+
+          // Samples between this click's end and the next beat are exactly 0.
+          final silenceEnd = bIdx + 1 < beats.length
+              ? beats[bIdx + 1]
+              : fx.frames;
+          for (var f = clickEnd; f < silenceEnd; f++) {
             for (var c = 0; c < guideCh; c++) {
-              expect(pcm[f * guideCh + c], 0);
+              expect(
+                pcm[f * guideCh + c],
+                0,
+                reason: 'Must be silent between clicks at frame $f',
+              );
             }
           }
-
-          final beats = [beat0, beat1, beat2, beat3];
-          for (var bIdx = 0; bIdx < beats.length; bIdx++) {
-            final b = beats[bIdx];
-            // First non-zero sample at or after beat - 1 is EXACTLY beat.
-            final searchStart = math.max(0, b - 1);
-            int? firstNonZero;
-            for (var f = searchStart; f < math.min(fx.frames, b + clickLen); f++) {
-              if (pcm[f * guideCh] != 0) {
-                firstNonZero = f;
-                break;
-              }
-            }
-            expect(firstNonZero, b, reason: 'Beat at $b onset must be exact');
-
-            // Same click on every channel & peak of isolated click within -3 dBFS ±0.1 dB.
-            var maxAbs = 0;
-            final clickEnd = math.min(fx.frames, b + clickLen);
-            for (var f = b; f < clickEnd; f++) {
-              final s0 = pcm[f * guideCh];
-              if (s0.abs() > maxAbs) maxAbs = s0.abs();
-              for (var c = 1; c < guideCh; c++) {
-                expect(
-                  pcm[f * guideCh + c],
-                  s0,
-                  reason: 'Channel $c must match channel 0 at frame $f',
-                );
-              }
-            }
-            final dbfs = _peakDbfs(maxAbs);
-            expect(dbfs, closeTo(-3.0, 0.1));
-
-            // Samples between this click's end and the next beat are exactly 0.
-            final silenceEnd =
-                bIdx + 1 < beats.length ? beats[bIdx + 1] : fx.frames;
-            for (var f = clickEnd; f < silenceEnd; f++) {
-              for (var c = 0; c < guideCh; c++) {
-                expect(
-                  pcm[f * guideCh + c],
-                  0,
-                  reason: 'Must be silent between clicks at frame $f',
-                );
-              }
-            }
-          }
-        },
-      );
+        }
+      });
     }
   }
 
@@ -285,20 +272,18 @@ void main() {
       frameCount: frames,
     );
 
-    final project = createDemoProject(
-      sampleRate: rate,
-      includeBeats: false,
-    ).copyWith(
-      sampleCount: frames,
-      beats: const [
-        Beat(sample: 10000, type: BeatType.strong),
-        Beat(sample: 30000, type: BeatType.beat), // hidden by strong filter
-        Beat(sample: 50000, type: BeatType.drop),
-        Beat(sample: 70000, type: BeatType.beat), // hidden by strong filter
-        Beat(sample: 90000, type: BeatType.downbeat),
-      ],
-      detection: const DetectionSettings(filter: BeatFilter.strong),
-    );
+    final project = createDemoProject(sampleRate: rate, includeBeats: false)
+        .copyWith(
+          sampleCount: frames,
+          beats: const [
+            Beat(sample: 10000, type: BeatType.strong),
+            Beat(sample: 30000, type: BeatType.beat), // hidden by strong filter
+            Beat(sample: 50000, type: BeatType.drop),
+            Beat(sample: 70000, type: BeatType.beat), // hidden by strong filter
+            Beat(sample: 90000, type: BeatType.downbeat),
+          ],
+          detection: const DetectionSettings(filter: BeatFilter.strong),
+        );
 
     final visibleSamples = [
       for (final i in visibleBeatIndices(project)) project.beats[i].sample,
@@ -392,43 +377,46 @@ void main() {
     expect(pcm[b2], 32767); // two ~0.707 peaks sum > 1.0 -> clips at 32767
   });
 
-  test('chunk boundary straddling a click (beat 3 samples before chunk end)', () async {
-    const rate = 44100;
-    const frames = kGuideTrackChunkFrames * 2 + 1000;
-    final songPath = '${tempDir.path}${Platform.pathSeparator}song.wav';
-    final guidePath = '${tempDir.path}${Platform.pathSeparator}guide.wav';
-    await _writeFadedSongWav(
-      path: songPath,
-      sampleRate: rate,
-      channels: 2,
-      frameCount: frames,
-    );
-
-    const straddleBeat = kGuideTrackChunkFrames - 3;
-    await renderGuideTrack(
-      songWavPath: songPath,
-      outputWavPath: guidePath,
-      beatSamples: [straddleBeat],
-      style: ClickStyle.rim,
-      channels: 2,
-    );
-
-    final pcm = await _readAllPcm(guidePath);
-    final click = renderClick(ClickStyle.rim, rate);
-
-    expect(pcm[(straddleBeat - 1) * 2], 0);
-    for (var i = 0; i < click.length; i++) {
-      final f = straddleBeat + i;
-      final expected = clipInt16(click[i] * 32767.0);
-      expect(
-        pcm[f * 2],
-        expected,
-        reason: 'Sample $i of click across chunk boundary at frame $f',
+  test(
+    'chunk boundary straddling a click (beat 3 samples before chunk end)',
+    () async {
+      const rate = 44100;
+      const frames = kGuideTrackChunkFrames * 2 + 1000;
+      final songPath = '${tempDir.path}${Platform.pathSeparator}song.wav';
+      final guidePath = '${tempDir.path}${Platform.pathSeparator}guide.wav';
+      await _writeFadedSongWav(
+        path: songPath,
+        sampleRate: rate,
+        channels: 2,
+        frameCount: frames,
       );
-      expect(pcm[f * 2 + 1], expected);
-    }
-    expect(pcm[(straddleBeat + click.length) * 2], 0);
-  });
+
+      const straddleBeat = kGuideTrackChunkFrames - 3;
+      await renderGuideTrack(
+        songWavPath: songPath,
+        outputWavPath: guidePath,
+        beatSamples: [straddleBeat],
+        style: ClickStyle.rim,
+        channels: 2,
+      );
+
+      final pcm = await _readAllPcm(guidePath);
+      final click = renderClick(ClickStyle.rim, rate);
+
+      expect(pcm[(straddleBeat - 1) * 2], 0);
+      for (var i = 0; i < click.length; i++) {
+        final f = straddleBeat + i;
+        final expected = clipInt16(click[i] * 32767.0);
+        expect(
+          pcm[f * 2],
+          expected,
+          reason: 'Sample $i of click across chunk boundary at frame $f',
+        );
+        expect(pcm[f * 2 + 1], expected);
+      }
+      expect(pcm[(straddleBeat + click.length) * 2], 0);
+    },
+  );
 
   test('peak buffer is bounded <= 4 MB for a 10-minute 48 kHz stereo song', () {
     // Compute directly from the chunked buffer allocation formula, plus verify

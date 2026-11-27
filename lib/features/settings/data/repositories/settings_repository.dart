@@ -67,7 +67,8 @@ class SettingsRepositoryImpl implements SettingsRepository {
       hapticsEnabled: haptics,
       defaultClickStyle: style ?? ClickStyle.snap,
       defaultAudioFormat: format ?? AudioFormat.wav,
-      includePreviewByDefault: prefs.getBool(INCLUDE_PREVIEW_BY_DEFAULT) ?? false,
+      includePreviewByDefault:
+          prefs.getBool(INCLUDE_PREVIEW_BY_DEFAULT) ?? false,
       monoGuideTrack: prefs.getBool(MONO_GUIDE_TRACK) ?? false,
     );
     return _current;

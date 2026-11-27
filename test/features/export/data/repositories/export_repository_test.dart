@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -17,7 +16,8 @@ import '../../../../fixtures/demo_project.dart';
 class FakeExportAudioNative implements AudioNative {
   int freeBytes = 1 << 40;
   AudioNativeException? encodeError;
-  final encodedFiles = <({String jobId, String wavPath, String outPath, int bitrate})>[];
+  final encodedFiles =
+      <({String jobId, String wavPath, String outPath, int bitrate})>[];
   final cancelledJobs = <String>[];
   int bgTokensIssued = 0;
   final endedBgTokens = <int>[];
@@ -138,12 +138,13 @@ Future<void> _writeSongWav({
         if (frameCount - 1 - frame < fade) {
           env = math.min(env, (frameCount - 1 - frame) / fade);
         }
-        final v = (0.3 *
-                env *
-                math.sin(2 * math.pi * 220.0 * frame / sampleRate) *
-                32767)
-            .round()
-            .clamp(-32768, 32767);
+        final v =
+            (0.3 *
+                    env *
+                    math.sin(2 * math.pi * 220.0 * frame / sampleRate) *
+                    32767)
+                .round()
+                .clamp(-32768, 32767);
         for (var c = 0; c < channels; c++) {
           pcm[i * channels + c] = v;
         }
@@ -256,45 +257,45 @@ void main() {
 
     // No .part files left anywhere in the pack folder.
     final packEntities = await Directory(pack.directoryPath).list().toList();
-    expect(
-      packEntities.where((e) => e.path.endsWith('.part')),
-      isEmpty,
-    );
+    expect(packEntities.where((e) => e.path.endsWith('.part')), isEmpty);
   });
 
-  test('M4A pack calls encodeM4a for each file and deletes intermediate WAVs', () async {
-    final project = makeProject();
-    await _writeSongWav(
-      path: paths.songWav(project.id),
-      sampleRate: project.sampleRate,
-      channels: project.channels,
-      frameCount: project.sampleCount,
-    );
+  test(
+    'M4A pack calls encodeM4a for each file and deletes intermediate WAVs',
+    () async {
+      final project = makeProject();
+      await _writeSongWav(
+        path: paths.songWav(project.id),
+        sampleRate: project.sampleRate,
+        channels: project.channels,
+        frameCount: project.sampleCount,
+      );
 
-    final pack = await repo.export(
-      project,
-      const ExportOptions(
-        format: AudioFormat.m4a,
-        includePreview: true,
-        clickStyle: ClickStyle.rim,
-      ),
-      cancel: ExportCancelToken(),
-    );
+      final pack = await repo.export(
+        project,
+        const ExportOptions(
+          format: AudioFormat.m4a,
+          includePreview: true,
+          clickStyle: ClickStyle.rim,
+        ),
+        cancel: ExportCancelToken(),
+      );
 
-    expect(pack.files.length, 3);
-    expect(audio.encodedFiles.length, 3);
-    for (final f in pack.files) {
-      expect(f.path.endsWith('.m4a'), isTrue);
-      expect(await File(f.path).exists(), isTrue);
-      expect(f.frameCount, project.sampleCount);
-    }
+      expect(pack.files.length, 3);
+      expect(audio.encodedFiles.length, 3);
+      for (final f in pack.files) {
+        expect(f.path.endsWith('.m4a'), isTrue);
+        expect(await File(f.path).exists(), isTrue);
+        expect(f.frameCount, project.sampleCount);
+      }
 
-    // All intermediate WAVs and .part files in the pack folder are deleted.
-    final remaining = await Directory(pack.directoryPath).list().toList();
-    for (final e in remaining) {
-      expect(e.path.endsWith('.m4a'), isTrue);
-    }
-  });
+      // All intermediate WAVs and .part files in the pack folder are deleted.
+      final remaining = await Directory(pack.directoryPath).list().toList();
+      for (final e in remaining) {
+        expect(e.path.endsWith('.m4a'), isTrue);
+      }
+    },
+  );
 
   test('cancel mid-render and cancel immediately after start (30x) leave no .part and folder is deletable', () async {
     final project = makeProject(frameCount: 44100 * 6);
@@ -426,41 +427,45 @@ void main() {
     );
   });
 
-  test('native encode_failed maps to encodeFailed and removes partial pack folder', () async {
-    final project = makeProject();
-    await _writeSongWav(
-      path: paths.songWav(project.id),
-      sampleRate: project.sampleRate,
-      channels: project.channels,
-      frameCount: project.sampleCount,
-    );
+  test(
+    'native encode_failed maps to encodeFailed and removes partial pack folder',
+    () async {
+      final project = makeProject();
+      await _writeSongWav(
+        path: paths.songWav(project.id),
+        sampleRate: project.sampleRate,
+        channels: project.channels,
+        frameCount: project.sampleCount,
+      );
 
-    audio.encodeError = const AudioNativeException(
-      AudioErrorKind.encodeFailed,
-      'Codec rejected rate',
-    );
+      audio.encodeError = const AudioNativeException(
+        AudioErrorKind.encodeFailed,
+        'Codec rejected rate',
+      );
 
-    await expectLater(
-      repo.export(
-        project,
-        const ExportOptions(format: AudioFormat.m4a),
-        cancel: ExportCancelToken(),
-      ),
-      throwsA(
-        isA<ExportFailureException>().having(
-          (e) => e.failure.kind,
-          'kind',
-          ExportFailureKind.encodeFailed,
+      await expectLater(
+        repo.export(
+          project,
+          const ExportOptions(format: AudioFormat.m4a),
+          cancel: ExportCancelToken(),
         ),
-      ),
-    );
+        throwsA(
+          isA<ExportFailureException>().having(
+            (e) => e.failure.kind,
+            'kind',
+            ExportFailureKind.encodeFailed,
+          ),
+        ),
+      );
 
-    final exportsDir = Directory(paths.exportsDir(project.id));
-    expect(
-      !await exportsDir.exists() || (await exportsDir.list().toList()).isEmpty,
-      isTrue,
-    );
-  });
+      final exportsDir = Directory(paths.exportsDir(project.id));
+      expect(
+        !await exportsDir.exists() ||
+            (await exportsDir.list().toList()).isEmpty,
+        isTrue,
+      );
+    },
+  );
 
   test('cleanUpStaleParts removes pack folders with .part files or empty, keeping finished ones', () async {
     final staleWithPart = Directory(
@@ -470,14 +475,10 @@ void main() {
     await File(p.join(staleWithPart.path, 'MidnightRun_beats.wav.part'))
         .writeAsBytes([1, 2, 3]);
 
-    final staleEmpty = Directory(
-      paths.exportPackDir('p1', '20261126-090100'),
-    );
+    final staleEmpty = Directory(paths.exportPackDir('p1', '20261126-090100'));
     await staleEmpty.create(recursive: true);
 
-    final finished = Directory(
-      paths.exportPackDir('p1', '20261126-090200'),
-    );
+    final finished = Directory(paths.exportPackDir('p1', '20261126-090200'));
     await finished.create(recursive: true);
     await File(p.join(finished.path, 'MidnightRun_beats.wav'))
         .writeAsBytes([1, 2, 3]);
@@ -489,33 +490,37 @@ void main() {
     expect(await finished.exists(), isTrue);
   });
 
-  test('keeps only the last 3 packs per project after a successful export', () async {
-    final project = makeProject(frameCount: 4410);
-    await _writeSongWav(
-      path: paths.songWav(project.id),
-      sampleRate: project.sampleRate,
-      channels: project.channels,
-      frameCount: project.sampleCount,
-    );
-
-    final createdDirs = <String>[];
-    for (var i = 0; i < 5; i++) {
-      final pack = await repo.export(
-        project,
-        const ExportOptions(format: AudioFormat.wav),
-        cancel: ExportCancelToken(),
+  test(
+    'keeps only the last 3 packs per project after a successful export',
+    () async {
+      final project = makeProject(frameCount: 4410);
+      await _writeSongWav(
+        path: paths.songWav(project.id),
+        sampleRate: project.sampleRate,
+        channels: project.channels,
+        frameCount: project.sampleCount,
       );
-      createdDirs.add(pack.directoryPath);
-    }
 
-    final remaining = await Directory(paths.exportsDir(project.id))
-        .list()
-        .where((e) => e is Directory)
-        .map((e) => e.path)
-        .toList()
-      ..sort();
+      final createdDirs = <String>[];
+      for (var i = 0; i < 5; i++) {
+        final pack = await repo.export(
+          project,
+          const ExportOptions(format: AudioFormat.wav),
+          cancel: ExportCancelToken(),
+        );
+        createdDirs.add(pack.directoryPath);
+      }
 
-    expect(remaining.length, 3);
-    expect(remaining, createdDirs.sublist(2));
-  });
+      final remaining =
+          await Directory(paths.exportsDir(project.id))
+                .list()
+                .where((e) => e is Directory)
+                .map((e) => e.path)
+                .toList()
+            ..sort();
+
+      expect(remaining.length, 3);
+      expect(remaining, createdDirs.sublist(2));
+    },
+  );
 }

@@ -20,8 +20,8 @@ class WavWriter {
     required this.sampleRate,
     required this.channels,
     required this.frameCount,
-    required RandomAccessFile raf,
-  }) : _raf = raf;
+    required this._raf,
+  });
 
   final String outputPath;
   final String partPath;

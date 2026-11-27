@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../app/app_router.dart';
 import '../../../../shared/shared.dart';
 import '../../bloc/beat_editor_cubit.dart';
 import '../widgets/auto_detect_sheet.dart';
@@ -138,7 +141,21 @@ class _EditorLayout extends StatelessWidget {
       children: [
         Column(
           children: [
-            SafeArea(bottom: false, child: EditorTopBar(state: state)),
+            SafeArea(
+              bottom: false,
+              child: EditorTopBar(
+                state: state,
+                onExport: () async {
+                  await cubit.flushPendingSave();
+                  if (!context.mounted) return;
+                  unawaited(
+                    context.router.push(
+                      ExportRoute(projectId: state.project.id),
+                    ),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),

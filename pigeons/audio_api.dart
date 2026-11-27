@@ -103,7 +103,12 @@ abstract class AudioHostApi {
   /// [bitrate] bits/s, same sample rate and channel count. Progress through
   /// AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
   @async
-  MediaInfo encodeM4a(String jobId, String wavPath, String outPath, int bitrate);
+  MediaInfo encodeM4a(
+    String jobId,
+    String wavPath,
+    String outPath,
+    int bitrate,
+  );
 
   /// Duration and format of an audio file as the platform sees it (for
   /// verifying an export, and for the E2E tests).

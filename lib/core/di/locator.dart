@@ -6,12 +6,15 @@ import '../../features/playback/data/just_audio_playback.dart';
 
 import '../../features/beat_detection/data/repositories/beat_detection_repository.dart';
 import '../../features/click_preview/data/repositories/click_preview_repository.dart';
+import '../../features/export/data/repositories/export_repository.dart';
+import '../../features/export/data/share_service.dart';
 import '../../features/import/data/datasources/source_picker.dart';
 import '../../features/import/data/repositories/import_repository.dart';
 import '../../features/projects/data/repositories/project_repository.dart';
 import '../../features/settings/data/output_route_service.dart';
 import '../../features/settings/data/repositories/settings_repository.dart';
 import '../audio_native/audio_native_client.dart';
+import '../entitlements/entitlement_service.dart';
 import '../haptics/haptics.dart';
 import '../storage/project_paths.dart';
 
@@ -58,4 +61,16 @@ void setupLocator() {
 
   // A new player per editor; the editor disposes it.
   locator.registerFactory<AudioPlayback>(JustAudioPlayback.new);
+
+  // Export (M6) and the one place that answers "is this allowed?".
+  locator.registerLazySingleton<EntitlementService>(
+    UnlimitedEntitlementService.new,
+  );
+  locator.registerLazySingleton<ShareService>(SharePlusShareService.new);
+  locator.registerLazySingleton<ExportRepository>(
+    () => ExportRepositoryImpl(
+      audio: locator<AudioNative>(),
+      paths: () => locator<Future<ProjectPaths>>(),
+    ),
+  );
 }

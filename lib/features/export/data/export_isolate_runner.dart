@@ -180,7 +180,12 @@ Future<ExportStepWavResult> runExportStepInIsolate({
       }
       unawaited(stopWorker(cancel: false));
     } else {
-      completer.completeError(StateError(message.join(' ')));
+      // An uncaught error inside the worker: the job died.
+      completer.completeError(
+        const ExportFailureException(
+          ExportFailure(kind: ExportFailureKind.interrupted),
+        ),
+      );
       unawaited(stopWorker(cancel: true));
     }
   });
@@ -307,7 +312,8 @@ Future<void> _exportStepIsolateEntry(_ExportStepIsolateRequest req) async {
   } on PreviewMixCancelledException {
     req.sendPort.send(<Object?>['error', 'cancelled', 'Cancelled']);
   } on FileSystemException catch (e) {
-    final isEnospc = e.osError?.errorCode == 28 ||
+    final isEnospc =
+        e.osError?.errorCode == 28 ||
         (e.osError?.message.toLowerCase().contains('no space') ?? false);
     req.sendPort.send(<Object?>[
       'error',

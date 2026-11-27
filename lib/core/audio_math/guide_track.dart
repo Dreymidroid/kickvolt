@@ -57,9 +57,8 @@ int estimateGuideTrackPeakBufferBytes({
 List<int> clampAndDeduplicateBeats(List<int> beatSamples, int frameCount) {
   if (frameCount <= 0 || beatSamples.isEmpty) return const <int>[];
   final maxFrame = frameCount - 1;
-  final clamped = <int>[
-    for (final s in beatSamples) s.clamp(0, maxFrame),
-  ]..sort();
+  final clamped = <int>[for (final s in beatSamples) s.clamp(0, maxFrame)]
+    ..sort();
   final unique = <int>[clamped.first];
   for (var i = 1; i < clamped.length; i++) {
     if (clamped[i] != unique.last) {

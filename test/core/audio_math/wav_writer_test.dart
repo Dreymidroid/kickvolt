@@ -21,85 +21,82 @@ void main() {
   group('WavWriter header & round-trip', () {
     for (final channels in [1, 2]) {
       for (final sampleRate in [44100, 48000]) {
-        test(
-          'writes exact 44-byte header and PCM payload for '
-          '${channels == 1 ? 'mono' : 'stereo'} $sampleRate Hz',
-          () async {
-            const frameCount = 1234;
-            final outPath =
-                '${tempDir.path}${Platform.pathSeparator}test_${channels}_$sampleRate.wav';
-            final samples = Int16List(frameCount * channels);
-            for (var i = 0; i < samples.length; i++) {
-              samples[i] = ((i * 97) % 65536) - 32768;
-            }
+        test('writes exact 44-byte header and PCM payload for '
+            '${channels == 1 ? 'mono' : 'stereo'} $sampleRate Hz', () async {
+          const frameCount = 1234;
+          final outPath =
+              '${tempDir.path}${Platform.pathSeparator}test_${channels}_$sampleRate.wav';
+          final samples = Int16List(frameCount * channels);
+          for (var i = 0; i < samples.length; i++) {
+            samples[i] = ((i * 97) % 65536) - 32768;
+          }
 
-            final writer = await WavWriter.open(
-              outputPath: outPath,
-              sampleRate: sampleRate,
-              channels: channels,
-              frameCount: frameCount,
-            );
-            // Write in three chunks to exercise streaming.
-            await writer.writeFrames(
-              Int16List.sublistView(samples, 0, 500 * channels),
-              500,
-            );
-            await writer.writeFrames(
-              Int16List.sublistView(samples, 500 * channels, 1000 * channels),
-              500,
-            );
-            await writer.writeFrames(
-              Int16List.sublistView(
-                samples,
-                1000 * channels,
-                frameCount * channels,
-              ),
-              frameCount - 1000,
-            );
-            await writer.finish();
+          final writer = await WavWriter.open(
+            outputPath: outPath,
+            sampleRate: sampleRate,
+            channels: channels,
+            frameCount: frameCount,
+          );
+          // Write in three chunks to exercise streaming.
+          await writer.writeFrames(
+            Int16List.sublistView(samples, 0, 500 * channels),
+            500,
+          );
+          await writer.writeFrames(
+            Int16List.sublistView(samples, 500 * channels, 1000 * channels),
+            500,
+          );
+          await writer.writeFrames(
+            Int16List.sublistView(
+              samples,
+              1000 * channels,
+              frameCount * channels,
+            ),
+            frameCount - 1000,
+          );
+          await writer.finish();
 
-            expect(await File('$outPath.part').exists(), isFalse);
-            final outFile = File(outPath);
-            expect(await outFile.exists(), isTrue);
+          expect(await File('$outPath.part').exists(), isFalse);
+          final outFile = File(outPath);
+          expect(await outFile.exists(), isTrue);
 
-            // Read back with readWavInfo.
-            final info = await readWavInfo(outFile);
-            expect(info.sampleRate, sampleRate);
-            expect(info.channels, channels);
-            expect(info.bitsPerSample, 16);
-            expect(info.dataOffset, 44);
-            expect(info.frameCount, frameCount);
-            expect(info.dataBytes, frameCount * channels * 2);
+          // Read back with readWavInfo.
+          final info = await readWavInfo(outFile);
+          expect(info.sampleRate, sampleRate);
+          expect(info.channels, channels);
+          expect(info.bitsPerSample, 16);
+          expect(info.dataOffset, 44);
+          expect(info.frameCount, frameCount);
+          expect(info.dataBytes, frameCount * channels * 2);
 
-            // Verify byte-by-byte for all 44 header bytes.
-            final bytes = await outFile.readAsBytes();
-            final dataBytes = frameCount * channels * 2;
-            final blockAlign = channels * 2;
-            final byteRate = sampleRate * blockAlign;
-            expect(bytes.length, 44 + dataBytes);
+          // Verify byte-by-byte for all 44 header bytes.
+          final bytes = await outFile.readAsBytes();
+          final dataBytes = frameCount * channels * 2;
+          final blockAlign = channels * 2;
+          final byteRate = sampleRate * blockAlign;
+          expect(bytes.length, 44 + dataBytes);
 
-            final bd = ByteData.sublistView(bytes, 0, 44);
-            expect(String.fromCharCodes(bytes.sublist(0, 4)), 'RIFF');
-            expect(bd.getUint32(4, Endian.little), 36 + dataBytes);
-            expect(String.fromCharCodes(bytes.sublist(8, 12)), 'WAVE');
-            expect(String.fromCharCodes(bytes.sublist(12, 16)), 'fmt ');
-            expect(bd.getUint32(16, Endian.little), 16);
-            expect(bd.getUint16(20, Endian.little), 1); // PCM format 1
-            expect(bd.getUint16(22, Endian.little), channels);
-            expect(bd.getUint32(24, Endian.little), sampleRate);
-            expect(bd.getUint32(28, Endian.little), byteRate);
-            expect(bd.getUint16(32, Endian.little), blockAlign);
-            expect(bd.getUint16(34, Endian.little), 16); // bitsPerSample
-            expect(String.fromCharCodes(bytes.sublist(36, 40)), 'data');
-            expect(bd.getUint32(40, Endian.little), dataBytes);
+          final bd = ByteData.sublistView(bytes, 0, 44);
+          expect(String.fromCharCodes(bytes.sublist(0, 4)), 'RIFF');
+          expect(bd.getUint32(4, Endian.little), 36 + dataBytes);
+          expect(String.fromCharCodes(bytes.sublist(8, 12)), 'WAVE');
+          expect(String.fromCharCodes(bytes.sublist(12, 16)), 'fmt ');
+          expect(bd.getUint32(16, Endian.little), 16);
+          expect(bd.getUint16(20, Endian.little), 1); // PCM format 1
+          expect(bd.getUint16(22, Endian.little), channels);
+          expect(bd.getUint32(24, Endian.little), sampleRate);
+          expect(bd.getUint32(28, Endian.little), byteRate);
+          expect(bd.getUint16(32, Endian.little), blockAlign);
+          expect(bd.getUint16(34, Endian.little), 16); // bitsPerSample
+          expect(String.fromCharCodes(bytes.sublist(36, 40)), 'data');
+          expect(bd.getUint32(40, Endian.little), dataBytes);
 
-            // Verify PCM payload read back from disk matches written samples.
-            final payload = ByteData.sublistView(bytes, 44);
-            for (var i = 0; i < samples.length; i++) {
-              expect(payload.getInt16(i * 2, Endian.little), samples[i]);
-            }
-          },
-        );
+          // Verify PCM payload read back from disk matches written samples.
+          final payload = ByteData.sublistView(bytes, 44);
+          for (var i = 0; i < samples.length; i++) {
+            expect(payload.getInt16(i * 2, Endian.little), samples[i]);
+          }
+        });
       }
     }
 
@@ -138,57 +135,63 @@ void main() {
       expect(bd1.getInt16(2, Endian.little), 23456);
     });
 
-    test('written-frames mismatch throws and leaves no .part or final file', () async {
-      final outPath = '${tempDir.path}${Platform.pathSeparator}mismatch.wav';
-      final writer = await WavWriter.open(
-        outputPath: outPath,
-        sampleRate: 44100,
-        channels: 1,
-        frameCount: 100,
-      );
-      await writer.writeFrames(Int16List(60), 60);
+    test(
+      'written-frames mismatch throws and leaves no .part or final file',
+      () async {
+        final outPath = '${tempDir.path}${Platform.pathSeparator}mismatch.wav';
+        final writer = await WavWriter.open(
+          outputPath: outPath,
+          sampleRate: 44100,
+          channels: 1,
+          frameCount: 100,
+        );
+        await writer.writeFrames(Int16List(60), 60);
 
-      await expectLater(writer.finish(), throwsA(isA<StateError>()));
-      expect(await File(outPath).exists(), isFalse);
-      expect(await File('$outPath.part').exists(), isFalse);
+        await expectLater(writer.finish(), throwsA(isA<StateError>()));
+        expect(await File(outPath).exists(), isFalse);
+        expect(await File('$outPath.part').exists(), isFalse);
 
-      // Over-writing beyond declared frameCount also throws and cleans up.
-      final outPath2 = '${tempDir.path}${Platform.pathSeparator}over.wav';
-      final writer2 = await WavWriter.open(
-        outputPath: outPath2,
-        sampleRate: 44100,
-        channels: 1,
-        frameCount: 10,
-      );
-      await expectLater(
-        writer2.writeFrames(Int16List(12), 12),
-        throwsA(isA<StateError>()),
-      );
-      await writer2.abort();
-      expect(await File(outPath2).exists(), isFalse);
-      expect(await File('$outPath2.part').exists(), isFalse);
-    });
+        // Over-writing beyond declared frameCount also throws and cleans up.
+        final outPath2 = '${tempDir.path}${Platform.pathSeparator}over.wav';
+        final writer2 = await WavWriter.open(
+          outputPath: outPath2,
+          sampleRate: 44100,
+          channels: 1,
+          frameCount: 10,
+        );
+        await expectLater(
+          writer2.writeFrames(Int16List(12), 12),
+          throwsA(isA<StateError>()),
+        );
+        await writer2.abort();
+        expect(await File(outPath2).exists(), isFalse);
+        expect(await File('$outPath2.part').exists(), isFalse);
+      },
+    );
 
-    test('cancel/abort leaves no .part and folder deletes immediately on Windows', () async {
-      final subDir = Directory('${tempDir.path}${Platform.pathSeparator}sub');
-      await subDir.create(recursive: true);
-      final outPath = '${subDir.path}${Platform.pathSeparator}cancelled.wav';
+    test(
+      'cancel/abort leaves no .part and folder deletes immediately on Windows',
+      () async {
+        final subDir = Directory('${tempDir.path}${Platform.pathSeparator}sub');
+        await subDir.create(recursive: true);
+        final outPath = '${subDir.path}${Platform.pathSeparator}cancelled.wav';
 
-      final writer = await WavWriter.open(
-        outputPath: outPath,
-        sampleRate: 44100,
-        channels: 2,
-        frameCount: 1000,
-      );
-      await writer.writeFrames(Int16List(400), 200);
-      await writer.abort();
+        final writer = await WavWriter.open(
+          outputPath: outPath,
+          sampleRate: 44100,
+          channels: 2,
+          frameCount: 1000,
+        );
+        await writer.writeFrames(Int16List(400), 200);
+        await writer.abort();
 
-      expect(await File(outPath).exists(), isFalse);
-      expect(await File('$outPath.part').exists(), isFalse);
+        expect(await File(outPath).exists(), isFalse);
+        expect(await File('$outPath.part').exists(), isFalse);
 
-      // Must succeed immediately on Windows without a sharing violation.
-      await subDir.delete(recursive: true);
-      expect(await subDir.exists(), isFalse);
-    });
+        // Must succeed immediately on Windows without a sharing violation.
+        await subDir.delete(recursive: true);
+        expect(await subDir.exists(), isFalse);
+      },
+    );
   });
 }

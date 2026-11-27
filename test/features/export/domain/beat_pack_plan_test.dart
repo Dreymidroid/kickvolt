@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickvolt/core/audio_math/click_synth.dart';
-import 'package:kickvolt/features/beat_detection/beat_detection.dart';
 import 'package:kickvolt/features/export/export.dart';
 import 'package:kickvolt/features/projects/projects.dart';
 
@@ -74,14 +73,11 @@ void main() {
         ),
       );
       expect(m4aWithPreview.files.length, 3);
-      expect(
-        m4aWithPreview.files.map((f) => f.fileName).toList(),
-        [
-          'MidnightRun_beats.m4a',
-          'MidnightRun_song.m4a',
-          'MidnightRun_preview.m4a',
-        ],
-      );
+      expect(m4aWithPreview.files.map((f) => f.fileName).toList(), [
+        'MidnightRun_beats.m4a',
+        'MidnightRun_song.m4a',
+        'MidnightRun_preview.m4a',
+      ]);
     });
 
     test('uses only visible beats from the project filter, sorted and deduplicated', () {
@@ -101,53 +97,50 @@ void main() {
       expect(plan.clickCount, 2);
     });
 
-    test('estimates bytes accurately for WAV and M4A (stereo and mono guide)', () {
-      const frames = 44100 * 10; // 10 s
-      final project = createDemoProject(includeBeats: false).copyWith(
-        sampleRate: 44100,
-        channels: 2,
-        sampleCount: frames,
-      );
+    test(
+      'estimates bytes accurately for WAV and M4A (stereo and mono guide)',
+      () {
+        const frames = 44100 * 10; // 10 s
+        final project = createDemoProject(includeBeats: false)
+            .copyWith(sampleRate: 44100, channels: 2, sampleCount: frames);
 
-      const stereoWavBytes = 44 + frames * 2 * 2;
-      const monoWavBytes = 44 + frames * 1 * 2;
+        const stereoWavBytes = 44 + frames * 2 * 2;
+        const monoWavBytes = 44 + frames * 1 * 2;
 
-      final stereoWavPlan = planBeatPack(
-        project,
-        const ExportOptions(
-          format: AudioFormat.wav,
-          includePreview: false,
-          monoGuide: false,
-        ),
-      );
-      expect(stereoWavPlan.estimatedDiskBytes, stereoWavBytes * 2);
+        final stereoWavPlan = planBeatPack(
+          project,
+          const ExportOptions(
+            format: AudioFormat.wav,
+            includePreview: false,
+            monoGuide: false,
+          ),
+        );
+        expect(stereoWavPlan.estimatedDiskBytes, stereoWavBytes * 2);
 
-      final monoGuideWavPlan = planBeatPack(
-        project,
-        const ExportOptions(
-          format: AudioFormat.wav,
-          includePreview: false,
-          monoGuide: true,
-        ),
-      );
-      expect(
-        monoGuideWavPlan.estimatedDiskBytes,
-        stereoWavBytes + monoWavBytes,
-      );
+        final monoGuideWavPlan = planBeatPack(
+          project,
+          const ExportOptions(
+            format: AudioFormat.wav,
+            includePreview: false,
+            monoGuide: true,
+          ),
+        );
+        expect(
+          monoGuideWavPlan.estimatedDiskBytes,
+          stereoWavBytes + monoWavBytes,
+        );
 
-      // M4A estimate: WAV estimate * 0.25 per file (§4.7).
-      final m4aPlan = planBeatPack(
-        project,
-        const ExportOptions(
-          format: AudioFormat.m4a,
-          includePreview: true,
-          monoGuide: false,
-        ),
-      );
-      expect(
-        m4aPlan.estimatedDiskBytes,
-        (stereoWavBytes * 3 * 0.25).ceil(),
-      );
-    });
+        // M4A estimate: WAV estimate * 0.25 per file (§4.7).
+        final m4aPlan = planBeatPack(
+          project,
+          const ExportOptions(
+            format: AudioFormat.m4a,
+            includePreview: true,
+            monoGuide: false,
+          ),
+        );
+        expect(m4aPlan.estimatedDiskBytes, (stereoWavBytes * 3 * 0.25).ceil());
+      },
+    );
   });
 }

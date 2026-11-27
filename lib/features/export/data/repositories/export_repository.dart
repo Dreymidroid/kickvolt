@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
 
-import '../../../../core/audio_math/guide_track.dart';
 import '../../../../core/audio_math/wav_header.dart';
 import '../../../../core/audio_native/audio_native_client.dart';
 import '../../../../core/storage/project_paths.dart';
@@ -42,13 +41,11 @@ abstract interface class ExportRepository {
 
 class ExportRepositoryImpl implements ExportRepository {
   ExportRepositoryImpl({
-    required AudioNative audio,
-    required Future<ProjectPaths> Function() paths,
+    required this._audio,
+    required this._paths,
     DateTime Function()? clock,
     this.renderHookForTesting,
-  }) : _audio = audio,
-       _paths = paths,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final AudioNative _audio;
   final Future<ProjectPaths> Function() _paths;
@@ -414,7 +411,8 @@ class ExportRepositoryImpl implements ExportRepository {
       );
     } on FileSystemException catch (e) {
       if (cancel.isCancelled) throw const ExportCancelledException();
-      final isEnospc = e.osError?.errorCode == 28 ||
+      final isEnospc =
+          e.osError?.errorCode == 28 ||
           (e.osError?.message.toLowerCase().contains('no space') ?? false) ||
           e.message.toLowerCase().contains('no space');
       if (isEnospc) {
@@ -491,9 +489,17 @@ class ExportRepositoryImpl implements ExportRepository {
 
     final result = <BeatPack>[];
     for (final dir in packDirs) {
-      final files = await dir.list().where((e) => e is File).cast<File>().toList();
+      final files = await dir
+          .list()
+          .where((e) => e is File)
+          .cast<File>()
+          .toList();
       if (files.isEmpty ||
-          files.any((f) => f.path.endsWith('.part') || p.basename(f.path).startsWith('_transient_'))) {
+          files.any(
+            (f) =>
+                f.path.endsWith('.part') ||
+                p.basename(f.path).startsWith('_transient_'),
+          )) {
         continue;
       }
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));

@@ -18,7 +18,10 @@ class Entitlements {
 class ExportQuota {
   const ExportQuota.unlimited() : remaining = null, limit = null;
 
-  const ExportQuota.limited({required int this.remaining, required int this.limit});
+  const ExportQuota.limited({
+    required int this.remaining,
+    required int this.limit,
+  });
 
   final int? remaining;
   final int? limit;
