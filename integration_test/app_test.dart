@@ -534,7 +534,7 @@ void main() {
           true,
       reason: 'mono guide saved',
     );
-    await tester.pageBack();
+    await tapWhenStable(tester, bySemanticsLabel('Back'));
     await pumpUntilFound(tester, find.text('No beat packs yet'));
 
     final fx = FixtureAudio.generate();
@@ -543,7 +543,7 @@ void main() {
     final cubit = app.editorCubit(tester);
     await tester.tap(find.text('Re-detect'));
     await pumpUntilFound(tester, find.text('Every 2nd'));
-    await tester.tap(find.text('Every 2nd'));
+    await tapWhenStable(tester, find.text('Every 2nd'));
     await tester.pump();
     await pumpUntil(
       tester,
@@ -752,9 +752,15 @@ void main() {
     expect(await app.projectDirs(), [id]);
     await tester.longPress(find.text('fx_delete'));
     await pumpUntilFound(tester, find.text('Delete'));
-    await tester.tap(find.text('Delete'));
+    await tapWhenStable(tester, find.text('Delete'));
     await pumpUntilFound(tester, find.text('Delete "fx_delete"?'));
-    await tester.tap(find.text('Delete'));
+    // The sheet's own "Delete" must be gone before tapping the dialog's.
+    await pumpUntil(
+      tester,
+      () => find.text('Delete').evaluate().length == 1,
+      reason: 'actions sheet closed',
+    );
+    await tapWhenStable(tester, find.text('Delete'));
     await pumpUntilFound(tester, find.text('No beat packs yet'));
     await pumpUntil(
       tester,

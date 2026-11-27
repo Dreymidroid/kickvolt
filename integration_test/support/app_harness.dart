@@ -33,10 +33,42 @@ Future<void> pumpUntil(
   final sw = Stopwatch()..start();
   while (!await condition()) {
     if (sw.elapsed > timeout) {
-      fail('Timed out after ${timeout.inSeconds} s waiting for: $reason');
+      fail(
+        'Timed out after ${timeout.inSeconds} s waiting for: $reason\n'
+        'Texts on screen: ${visibleTexts()}',
+      );
     }
     await tester.pump(const Duration(milliseconds: 100));
   }
+  // State may have changed inside an event handler with no frame since:
+  // build once so finders see the result.
+  await tester.pump();
+}
+
+/// Every [Text] currently in the tree, for failure messages.
+List<String> visibleTexts() => [
+  for (final e in find.byType(Text).evaluate())
+    if ((e.widget as Text).data case final String s) s,
+];
+
+/// Taps [finder] once it exists and has stopped moving (sheets and dialogs
+/// slide in; a tap mid-animation can land on the wrong spot).
+Future<void> tapWhenStable(WidgetTester tester, Finder finder) async {
+  await pumpUntilFound(tester, finder);
+  Rect? last;
+  await pumpUntil(
+    tester,
+    () {
+      final r = tester.getRect(finder.first);
+      final stable = r == last;
+      last = r;
+      return stable;
+    },
+    timeout: const Duration(seconds: 10),
+    reason: '${finder.describeMatch(Plurality.one)} to stop moving',
+  );
+  await tester.tap(finder.first);
+  await tester.pump();
 }
 
 Future<void> pumpUntilFound(
@@ -136,7 +168,7 @@ class E2EApp {
     await pumpUntilFound(tester, find.text('Import a song'));
     await tester.tap(find.text('Import a song').first);
     await pumpUntilFound(tester, find.text('Files'));
-    await tester.tap(find.text('Files'));
+    await tapWhenStable(tester, find.text('Files'));
     await tester.pump();
   }
 
@@ -178,7 +210,13 @@ class E2EApp {
   /// Editor › Back to projects, then waits for Home.
   Future<void> backToHome(WidgetTester tester) async {
     await tester.tap(bySemanticsLabel('Back to projects'));
-    await pumpUntilFound(tester, find.text('KickVolt'));
+    await pumpUntil(
+      tester,
+      () =>
+          find.byType(EditorTopBar).evaluate().isEmpty &&
+          find.text('KickVolt').evaluate().isNotEmpty,
+      reason: 'editor closed, Home visible',
+    );
   }
 
   /// Project folders (not index.json) currently on disk.
