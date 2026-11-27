@@ -236,6 +236,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Switch to WAV and retry'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
 
       // 4. sourceMissing -> only Cancel (no Try again).
       cubit.dismissFailure();

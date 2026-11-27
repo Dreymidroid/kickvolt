@@ -53,6 +53,7 @@ class ExportCubit extends Cubit<ExportState> {
   ExportOptions _options = const ExportOptions();
   ExportQuota _quota = const ExportQuota.unlimited();
   ExportCancelToken? _token;
+  bool _starting = false;
 
   Future<void> load(String projectId) async {
     emit(const ExportState.loading());
@@ -107,14 +108,21 @@ class ExportCubit extends Cubit<ExportState> {
   /// entitlement service refuses, or when there are no visible beats.
   Future<void> startExport() async {
     final project = _project;
-    if (project == null ||
+    if (_starting ||
+        project == null ||
         (state is! ExportEditing && state is! ExportFailed)) {
       return;
     }
     final plan = planBeatPack(project, _options);
     if (plan.clickCount == 0) return;
-    if (!await _entitlements.canExport()) return;
-    if (isClosed) return;
+    _starting = true;
+    final bool allowed;
+    try {
+      allowed = await _entitlements.canExport();
+    } finally {
+      _starting = false;
+    }
+    if (!allowed || isClosed) return;
 
     final options = _options;
     final token = ExportCancelToken();
@@ -154,6 +162,7 @@ class ExportCubit extends Cubit<ExportState> {
       );
       if (isClosed || token.isCancelled) return;
       await _entitlements.recordExport();
+      if (isClosed || token.isCancelled) return;
       emit(ExportState.done(pack: pack));
       unawaited(_haptics.successNotification());
     } on ExportCancelledException {

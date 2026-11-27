@@ -21,26 +21,48 @@ enum M4aEncoder {
       throw audioError("encode_failed", error.localizedDescription)
     }
 
+    // AVURLAsset relies on the `.m4a` path extension to identify the container
+    // when probing; if the caller passed a `.part` staging path, write and
+    // probe a sibling `.m4a` temp file and move it into `outURL` on success.
+    let needsTempM4a = outURL.pathExtension.lowercased() != "m4a"
+    let workingURL =
+      needsTempM4a
+      ? outURL.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).m4a")
+      : outURL
+
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       DispatchQueue.global(qos: .userInitiated).async {
         do {
           try encodeBlocking(
             source: source,
-            outURL: outURL,
+            outURL: workingURL,
             bitrate: bitrate,
             cancel: cancel,
             progress: progress
           )
           continuation.resume()
         } catch {
-          try? FileManager.default.removeItem(at: outURL)
+          try? FileManager.default.removeItem(at: workingURL)
           continuation.resume(throwing: mapError(error))
         }
       }
     }
 
+    let info: MediaInfo
+    do {
+      info = try await probeMedia(url: workingURL)
+      if needsTempM4a {
+        let fm = FileManager.default
+        try? fm.removeItem(at: outURL)
+        try fm.moveItem(at: workingURL, to: outURL)
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: workingURL)
+      throw mapError(error)
+    }
+
     progress(1.0)
-    return try await probeMedia(url: outURL)
+    return info
   }
 
   private static func encodeBlocking(

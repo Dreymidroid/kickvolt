@@ -22,7 +22,10 @@ class ExportFailedSheet extends StatelessWidget {
     final kv = context.kv;
     final cubit = context.read<ExportCubit>();
     final kind = failure.kind;
-    final canRetry = kind != ExportFailureKind.sourceMissing;
+    final canRetry =
+        kind != ExportFailureKind.sourceMissing &&
+        kind != ExportFailureKind.encodeFailed;
+    final switchIsPrimary = kind == ExportFailureKind.encodeFailed;
     final switchLabel = switch (kind) {
       ExportFailureKind.diskFull when options.format == AudioFormat.wav =>
         'Switch to M4A and retry',
@@ -106,7 +109,12 @@ class ExportFailedSheet extends StatelessWidget {
                   const SizedBox(height: 18),
                   if (canRetry)
                     KvPrimaryButton(label: 'Try again', onPressed: cubit.retry),
-                  if (switchLabel != null) ...[
+                  if (switchLabel != null && switchIsPrimary)
+                    KvPrimaryButton(
+                      label: switchLabel,
+                      onPressed: cubit.switchFormatAndRetry,
+                    ),
+                  if (switchLabel != null && !switchIsPrimary) ...[
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
