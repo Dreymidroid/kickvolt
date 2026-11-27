@@ -20,7 +20,8 @@ mixin _$AppSettings {
 /// user hasn't calibrated yet. [OutputKind.unknown] is a real calibration
 /// on a route we couldn't classify (e.g. Android BLE-audio headphones).
  OutputKind? get latencyCalibratedOn;/// Global haptics switch (§6.2).
- bool get hapticsEnabled;
+ bool get hapticsEnabled;/// Export defaults (§6.4). The Export screen starts from these.
+ ClickStyle get defaultClickStyle; AudioFormat get defaultAudioFormat; bool get includePreviewByDefault; bool get monoGuideTrack;
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -32,20 +33,20 @@ $AppSettingsCopyWith<AppSettings> get copyWith => _$AppSettingsCopyWithImpl<AppS
 @override
 bool operator ==(Object other) {
   final _this = this as AppSettings;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.latencyOffsetMs, _this.latencyOffsetMs) || other.latencyOffsetMs == _this.latencyOffsetMs)&&(identical(other.latencyCalibratedOn, _this.latencyCalibratedOn) || other.latencyCalibratedOn == _this.latencyCalibratedOn)&&(identical(other.hapticsEnabled, _this.hapticsEnabled) || other.hapticsEnabled == _this.hapticsEnabled));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.latencyOffsetMs, _this.latencyOffsetMs) || other.latencyOffsetMs == _this.latencyOffsetMs)&&(identical(other.latencyCalibratedOn, _this.latencyCalibratedOn) || other.latencyCalibratedOn == _this.latencyCalibratedOn)&&(identical(other.hapticsEnabled, _this.hapticsEnabled) || other.hapticsEnabled == _this.hapticsEnabled)&&(identical(other.defaultClickStyle, _this.defaultClickStyle) || other.defaultClickStyle == _this.defaultClickStyle)&&(identical(other.defaultAudioFormat, _this.defaultAudioFormat) || other.defaultAudioFormat == _this.defaultAudioFormat)&&(identical(other.includePreviewByDefault, _this.includePreviewByDefault) || other.includePreviewByDefault == _this.includePreviewByDefault)&&(identical(other.monoGuideTrack, _this.monoGuideTrack) || other.monoGuideTrack == _this.monoGuideTrack));
 }
 
 
 @override
 int get hashCode {
   final _this = this as AppSettings;
-  return Object.hash(runtimeType,_this.latencyOffsetMs,_this.latencyCalibratedOn,_this.hapticsEnabled);
+  return Object.hash(runtimeType,_this.latencyOffsetMs,_this.latencyCalibratedOn,_this.hapticsEnabled,_this.defaultClickStyle,_this.defaultAudioFormat,_this.includePreviewByDefault,_this.monoGuideTrack);
 }
 
 @override
 String toString() {
   final _this = this as AppSettings;
-  return 'AppSettings(latencyOffsetMs: ${_this.latencyOffsetMs}, latencyCalibratedOn: ${_this.latencyCalibratedOn}, hapticsEnabled: ${_this.hapticsEnabled})';
+  return 'AppSettings(latencyOffsetMs: ${_this.latencyOffsetMs}, latencyCalibratedOn: ${_this.latencyCalibratedOn}, hapticsEnabled: ${_this.hapticsEnabled}, defaultClickStyle: ${_this.defaultClickStyle}, defaultAudioFormat: ${_this.defaultAudioFormat}, includePreviewByDefault: ${_this.includePreviewByDefault}, monoGuideTrack: ${_this.monoGuideTrack})';
 }
 
 
@@ -56,7 +57,7 @@ abstract mixin class $AppSettingsCopyWith<$Res>  {
   factory $AppSettingsCopyWith(AppSettings value, $Res Function(AppSettings) _then) = _$AppSettingsCopyWithImpl;
 @useResult
 $Res call({
- int latencyOffsetMs, OutputKind? latencyCalibratedOn, bool hapticsEnabled
+ int latencyOffsetMs, OutputKind? latencyCalibratedOn, bool hapticsEnabled, ClickStyle defaultClickStyle, AudioFormat defaultAudioFormat, bool includePreviewByDefault, bool monoGuideTrack
 });
 
 
@@ -73,11 +74,15 @@ class _$AppSettingsCopyWithImpl<$Res>
 
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? latencyOffsetMs = null,Object? latencyCalibratedOn = freezed,Object? hapticsEnabled = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? latencyOffsetMs = null,Object? latencyCalibratedOn = freezed,Object? hapticsEnabled = null,Object? defaultClickStyle = null,Object? defaultAudioFormat = null,Object? includePreviewByDefault = null,Object? monoGuideTrack = null,}) {
   return _then(AppSettings(
 latencyOffsetMs: null == latencyOffsetMs ? _self.latencyOffsetMs : latencyOffsetMs // ignore: cast_nullable_to_non_nullable
 as int,latencyCalibratedOn: freezed == latencyCalibratedOn ? _self.latencyCalibratedOn : latencyCalibratedOn // ignore: cast_nullable_to_non_nullable
 as OutputKind?,hapticsEnabled: null == hapticsEnabled ? _self.hapticsEnabled : hapticsEnabled // ignore: cast_nullable_to_non_nullable
+as bool,defaultClickStyle: null == defaultClickStyle ? _self.defaultClickStyle : defaultClickStyle // ignore: cast_nullable_to_non_nullable
+as ClickStyle,defaultAudioFormat: null == defaultAudioFormat ? _self.defaultAudioFormat : defaultAudioFormat // ignore: cast_nullable_to_non_nullable
+as AudioFormat,includePreviewByDefault: null == includePreviewByDefault ? _self.includePreviewByDefault : includePreviewByDefault // ignore: cast_nullable_to_non_nullable
+as bool,monoGuideTrack: null == monoGuideTrack ? _self.monoGuideTrack : monoGuideTrack // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -163,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled,  ClickStyle defaultClickStyle,  AudioFormat defaultAudioFormat,  bool includePreviewByDefault,  bool monoGuideTrack)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppSettings() when $default != null:
-return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled);case _:
+return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled,_that.defaultClickStyle,_that.defaultAudioFormat,_that.includePreviewByDefault,_that.monoGuideTrack);case _:
   return orElse();
 
 }
@@ -184,10 +189,10 @@ return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEna
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled,  ClickStyle defaultClickStyle,  AudioFormat defaultAudioFormat,  bool includePreviewByDefault,  bool monoGuideTrack)  $default,) {final _that = this;
 switch (_that) {
 case _AppSettings():
-return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled);case _:
+return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled,_that.defaultClickStyle,_that.defaultAudioFormat,_that.includePreviewByDefault,_that.monoGuideTrack);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -204,10 +209,10 @@ return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEna
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int latencyOffsetMs,  OutputKind? latencyCalibratedOn,  bool hapticsEnabled,  ClickStyle defaultClickStyle,  AudioFormat defaultAudioFormat,  bool includePreviewByDefault,  bool monoGuideTrack)?  $default,) {final _that = this;
 switch (_that) {
 case _AppSettings() when $default != null:
-return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled);case _:
+return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEnabled,_that.defaultClickStyle,_that.defaultAudioFormat,_that.includePreviewByDefault,_that.monoGuideTrack);case _:
   return null;
 
 }
@@ -219,7 +224,7 @@ return $default(_that.latencyOffsetMs,_that.latencyCalibratedOn,_that.hapticsEna
 
 
 class _AppSettings implements AppSettings {
-  const _AppSettings({this.latencyOffsetMs = 0, this.latencyCalibratedOn, this.hapticsEnabled = true});
+  const _AppSettings({this.latencyOffsetMs = 0, this.latencyCalibratedOn, this.hapticsEnabled = true, this.defaultClickStyle = ClickStyle.snap, this.defaultAudioFormat = AudioFormat.wav, this.includePreviewByDefault = false, this.monoGuideTrack = false});
   
 
 /// Tap-to-mark latency compensation in ms, clamped to `[-100, 500]`.
@@ -230,6 +235,11 @@ class _AppSettings implements AppSettings {
 @override final  OutputKind? latencyCalibratedOn;
 /// Global haptics switch (§6.2).
 @override@JsonKey() final  bool hapticsEnabled;
+/// Export defaults (§6.4). The Export screen starts from these.
+@override@JsonKey() final  ClickStyle defaultClickStyle;
+@override@JsonKey() final  AudioFormat defaultAudioFormat;
+@override@JsonKey() final  bool includePreviewByDefault;
+@override@JsonKey() final  bool monoGuideTrack;
 
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
@@ -241,18 +251,18 @@ _$AppSettingsCopyWith<_AppSettings> get copyWith => __$AppSettingsCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.latencyOffsetMs, latencyOffsetMs) || other.latencyOffsetMs == latencyOffsetMs)&&(identical(other.latencyCalibratedOn, latencyCalibratedOn) || other.latencyCalibratedOn == latencyCalibratedOn)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.latencyOffsetMs, latencyOffsetMs) || other.latencyOffsetMs == latencyOffsetMs)&&(identical(other.latencyCalibratedOn, latencyCalibratedOn) || other.latencyCalibratedOn == latencyCalibratedOn)&&(identical(other.hapticsEnabled, hapticsEnabled) || other.hapticsEnabled == hapticsEnabled)&&(identical(other.defaultClickStyle, defaultClickStyle) || other.defaultClickStyle == defaultClickStyle)&&(identical(other.defaultAudioFormat, defaultAudioFormat) || other.defaultAudioFormat == defaultAudioFormat)&&(identical(other.includePreviewByDefault, includePreviewByDefault) || other.includePreviewByDefault == includePreviewByDefault)&&(identical(other.monoGuideTrack, monoGuideTrack) || other.monoGuideTrack == monoGuideTrack));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,latencyOffsetMs,latencyCalibratedOn,hapticsEnabled);
+    return Object.hash(runtimeType,latencyOffsetMs,latencyCalibratedOn,hapticsEnabled,defaultClickStyle,defaultAudioFormat,includePreviewByDefault,monoGuideTrack);
 }
 
 @override
 String toString() {
-    return 'AppSettings(latencyOffsetMs: $latencyOffsetMs, latencyCalibratedOn: $latencyCalibratedOn, hapticsEnabled: $hapticsEnabled)';
+    return 'AppSettings(latencyOffsetMs: $latencyOffsetMs, latencyCalibratedOn: $latencyCalibratedOn, hapticsEnabled: $hapticsEnabled, defaultClickStyle: $defaultClickStyle, defaultAudioFormat: $defaultAudioFormat, includePreviewByDefault: $includePreviewByDefault, monoGuideTrack: $monoGuideTrack)';
 }
 
 
@@ -263,7 +273,7 @@ abstract mixin class _$AppSettingsCopyWith<$Res> implements $AppSettingsCopyWith
   factory _$AppSettingsCopyWith(_AppSettings value, $Res Function(_AppSettings) _then) = __$AppSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- int latencyOffsetMs, OutputKind? latencyCalibratedOn, bool hapticsEnabled
+ int latencyOffsetMs, OutputKind? latencyCalibratedOn, bool hapticsEnabled, ClickStyle defaultClickStyle, AudioFormat defaultAudioFormat, bool includePreviewByDefault, bool monoGuideTrack
 });
 
 
@@ -280,11 +290,15 @@ class __$AppSettingsCopyWithImpl<$Res>
 
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? latencyOffsetMs = null,Object? latencyCalibratedOn = freezed,Object? hapticsEnabled = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? latencyOffsetMs = null,Object? latencyCalibratedOn = freezed,Object? hapticsEnabled = null,Object? defaultClickStyle = null,Object? defaultAudioFormat = null,Object? includePreviewByDefault = null,Object? monoGuideTrack = null,}) {
   return _then(_AppSettings(
 latencyOffsetMs: null == latencyOffsetMs ? _self.latencyOffsetMs : latencyOffsetMs // ignore: cast_nullable_to_non_nullable
 as int,latencyCalibratedOn: freezed == latencyCalibratedOn ? _self.latencyCalibratedOn : latencyCalibratedOn // ignore: cast_nullable_to_non_nullable
 as OutputKind?,hapticsEnabled: null == hapticsEnabled ? _self.hapticsEnabled : hapticsEnabled // ignore: cast_nullable_to_non_nullable
+as bool,defaultClickStyle: null == defaultClickStyle ? _self.defaultClickStyle : defaultClickStyle // ignore: cast_nullable_to_non_nullable
+as ClickStyle,defaultAudioFormat: null == defaultAudioFormat ? _self.defaultAudioFormat : defaultAudioFormat // ignore: cast_nullable_to_non_nullable
+as AudioFormat,includePreviewByDefault: null == includePreviewByDefault ? _self.includePreviewByDefault : includePreviewByDefault // ignore: cast_nullable_to_non_nullable
+as bool,monoGuideTrack: null == monoGuideTrack ? _self.monoGuideTrack : monoGuideTrack // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }

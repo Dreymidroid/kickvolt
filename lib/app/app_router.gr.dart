@@ -130,6 +130,62 @@ class BeatEditorRouteArgs {
 }
 
 /// generated route for
+/// [ExportScreen]
+class ExportRoute extends PageRouteInfo<ExportRouteArgs> {
+  ExportRoute({
+    Key? key,
+    required String projectId,
+    ExportCubit? cubit,
+    List<PageRouteInfo>? children,
+  }) : super(
+         ExportRoute.name,
+         args: ExportRouteArgs(key: key, projectId: projectId, cubit: cubit),
+         initialChildren: children,
+       );
+
+  static const String name = 'ExportRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<ExportRouteArgs>();
+      return ExportScreen(
+        key: args.key,
+        projectId: args.projectId,
+        cubit: args.cubit,
+      );
+    },
+  );
+}
+
+class ExportRouteArgs {
+  const ExportRouteArgs({this.key, required this.projectId, this.cubit});
+
+  final Key? key;
+
+  final String projectId;
+
+  final ExportCubit? cubit;
+
+  @override
+  String toString() {
+    return 'ExportRouteArgs{key: $key, projectId: $projectId, cubit: $cubit}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! ExportRouteArgs) return false;
+    return key == other.key &&
+        projectId == other.projectId &&
+        cubit == other.cubit;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ projectId.hashCode ^ cubit.hashCode;
+}
+
+/// generated route for
 /// [HomeScreen]
 class HomeRoute extends PageRouteInfo<HomeRouteArgs> {
   HomeRoute({

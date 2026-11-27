@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kickvolt/core/audio_math/click_synth.dart';
+import 'package:kickvolt/features/export/export.dart';
 import 'package:kickvolt/features/settings/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +15,10 @@ void main() {
       expect(s.latencyOffsetMs, 0);
       expect(s.latencyCalibratedOn, isNull);
       expect(s.hapticsEnabled, isTrue);
+      expect(s.defaultClickStyle, ClickStyle.snap);
+      expect(s.defaultAudioFormat, AudioFormat.wav);
+      expect(s.includePreviewByDefault, isFalse);
+      expect(s.monoGuideTrack, isFalse);
       expect(repo.current, s);
     });
 
@@ -24,6 +30,10 @@ void main() {
           latencyOffsetMs: 42,
           latencyCalibratedOn: OutputKind.bluetooth,
           hapticsEnabled: false,
+          defaultClickStyle: ClickStyle.kick,
+          defaultAudioFormat: AudioFormat.m4a,
+          includePreviewByDefault: true,
+          monoGuideTrack: true,
         ),
       );
 
@@ -32,6 +42,10 @@ void main() {
       expect(loaded.latencyOffsetMs, 42);
       expect(loaded.latencyCalibratedOn, OutputKind.bluetooth);
       expect(loaded.hapticsEnabled, isFalse);
+      expect(loaded.defaultClickStyle, ClickStyle.kick);
+      expect(loaded.defaultAudioFormat, AudioFormat.m4a);
+      expect(loaded.includePreviewByDefault, isTrue);
+      expect(loaded.monoGuideTrack, isTrue);
     });
 
     test('clamps latencyOffsetMs to [-100, 500] on save and load', () async {

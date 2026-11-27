@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app/app.dart';
 import 'core/core.dart';
+import 'features/export/data/repositories/export_repository.dart';
 import 'features/projects/data/repositories/project_repository.dart';
 import 'shared/shared.dart';
 
@@ -17,6 +18,13 @@ Future<void> main() async {
     );
   } catch (e) {
     developer.log('Orphan project cleanup failed: $e', name: 'main');
+  }
+  try {
+    await locator<ExportRepository>().cleanUpStaleParts().timeout(
+      const Duration(milliseconds: 500),
+    );
+  } catch (e) {
+    developer.log('Stale export cleanup failed: $e', name: 'main');
   }
   // Painters draw text directly, so fonts must be ready before first frame.
   // Don't block launch forever when offline; fall back to system fonts.

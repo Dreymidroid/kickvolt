@@ -24,6 +24,7 @@ class AudioHostApiImpl(
     private val context: Context,
     private val progressApi: AudioProgressApi,
     private val permissions: PermissionRequester,
+    private val directoryPicker: DirectoryTreePicker,
 ) : AudioHostApi {
     private val jobs = ConcurrentHashMap<String, AtomicBoolean>()
     private val mainScope = CoroutineScope(Dispatchers.Main)
@@ -83,6 +84,34 @@ class AudioHostApiImpl(
     }
 
     override fun freeDiskBytes(path: String): Long = WavDecoder.freeBytes(path)
+
+    override suspend fun encodeM4a(
+        jobId: String,
+        wavPath: String,
+        outPath: String,
+        bitrate: Long,
+    ): MediaInfo {
+        val flag = AtomicBoolean(false)
+        jobs[jobId] = flag
+        try {
+            return withContext(Dispatchers.IO) {
+                M4aEncoder(flag) { p -> reportProgress(jobId, p) }
+                    .encode(wavPath, outPath, bitrate.toInt())
+            }
+        } finally {
+            jobs.remove(jobId)
+        }
+    }
+
+    override suspend fun probeMedia(path: String): MediaInfo =
+        withContext(Dispatchers.IO) { M4aEncoder.probeMedia(path) }
+
+    override suspend fun saveToFiles(paths: List<String>): Long =
+        withContext(Dispatchers.IO) { FileSaver(context, directoryPicker).saveToFiles(paths) }
+
+    override fun beginBackgroundWork(name: String): Long = 0L
+
+    override fun endBackgroundWork(token: Long) {}
 
     private fun reportProgress(jobId: String, fraction: Double) {
         // FlutterApi calls must happen on the platform main thread.

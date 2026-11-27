@@ -235,6 +235,66 @@ class LibraryTrack {
   }
 }
 
+/// Duration and format of an audio file as the platform sees it.
+class MediaInfo {
+  MediaInfo({
+    required this.sampleRate,
+    required this.channels,
+    required this.durationUs,
+    this.frameCount,
+  });
+
+  int sampleRate;
+
+  int channels;
+
+  int durationUs;
+
+  int? frameCount;
+
+  List<Object?> _toList() {
+    return <Object?>[sampleRate, channels, durationUs, frameCount];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static MediaInfo decode(Object result) {
+    result as List<Object?>;
+    return MediaInfo(
+      sampleRate: result[0]! as int,
+      channels: result[1]! as int,
+      durationUs: result[2]! as int,
+      frameCount: result[3] as int?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! MediaInfo || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(sampleRate, other.sampleRate) &&
+        _deepEquals(channels, other.channels) &&
+        _deepEquals(durationUs, other.durationUs) &&
+        _deepEquals(frameCount, other.frameCount);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'MediaInfo(sampleRate: $sampleRate, channels: $channels, durationUs: $durationUs, frameCount: $frameCount)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -248,6 +308,9 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is LibraryTrack) {
       buffer.putUint8(130);
       writeValue(buffer, value.encode());
+    } else if (value is MediaInfo) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -260,6 +323,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return DecodeResult.decode(readValue(buffer)!);
       case 130:
         return LibraryTrack.decode(readValue(buffer)!);
+      case 131:
+        return MediaInfo.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -269,8 +334,8 @@ class _PigeonCodec extends StandardMessageCodec {
 /// Native audio work. Long jobs run off the platform main thread and report
 /// progress through [AudioProgressApi]. Failures are PlatformExceptions with
 /// one of these codes: `drm_protected`, `cloud_item`, `no_audio_track`,
-/// `unsupported_format`, `decode_failed`, `disk_full`, `permission_denied`,
-/// `cancelled`.
+/// `unsupported_format`, `decode_failed`, `encode_failed`, `disk_full`,
+/// `permission_denied`, `cancelled`.
 class AudioHostApi {
   /// Constructor for [AudioHostApi]. The [binaryMessenger] named argument is
   /// available for dependency injection. If it is left null, the default
@@ -415,6 +480,119 @@ class AudioHostApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as int;
+  }
+
+  /// Encodes a 16-bit PCM WAV to AAC in an MPEG-4 container (.m4a) at
+  /// [bitrate] bits/s, same sample rate and channel count. Progress through
+  /// AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
+  Future<MediaInfo> encodeM4a(
+    String jobId,
+    String wavPath,
+    String outPath,
+    int bitrate,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.encodeM4a$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[jobId, wavPath, outPath, bitrate],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as MediaInfo;
+  }
+
+  /// Duration and format of an audio file as the platform sees it (for
+  /// verifying an export, and for the E2E tests).
+  Future<MediaInfo> probeMedia(String path) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.probeMedia$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[path],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as MediaInfo;
+  }
+
+  /// Lets the user pick a folder (Android SAF / iOS document picker) and
+  /// copies [paths] into it. Returns how many were saved; 0 if cancelled.
+  Future<int> saveToFiles(List<String> paths) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.saveToFiles$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[paths],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as int;
+  }
+
+  /// iOS: begins/ends a background task so an export can finish when the app
+  /// is backgrounded. Android: no-op.
+  Future<int> beginBackgroundWork(String name) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.beginBackgroundWork$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[name],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as int;
+  }
+
+  Future<void> endBackgroundWork(int token) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.kickvolt.AudioHostApi.endBackgroundWork$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[token],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 }
 

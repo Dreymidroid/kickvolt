@@ -50,11 +50,26 @@ class LibraryTrack {
   String uri;
 }
 
+/// Duration and format of an audio file as the platform sees it.
+class MediaInfo {
+  MediaInfo({
+    required this.sampleRate,
+    required this.channels,
+    required this.durationUs,
+    this.frameCount,
+  });
+
+  int sampleRate;
+  int channels;
+  int durationUs;
+  int? frameCount;
+}
+
 /// Native audio work. Long jobs run off the platform main thread and report
 /// progress through [AudioProgressApi]. Failures are PlatformExceptions with
 /// one of these codes: `drm_protected`, `cloud_item`, `no_audio_track`,
-/// `unsupported_format`, `decode_failed`, `disk_full`, `permission_denied`,
-/// `cancelled`.
+/// `unsupported_format`, `decode_failed`, `encode_failed`, `disk_full`,
+/// `permission_denied`, `cancelled`.
 @HostApi()
 abstract class AudioHostApi {
   /// Decodes the first audio track of [inputPath] (an audio or video file,
@@ -83,6 +98,32 @@ abstract class AudioHostApi {
 
   /// Free bytes on the volume holding [path].
   int freeDiskBytes(String path);
+
+  /// Encodes a 16-bit PCM WAV to AAC in an MPEG-4 container (.m4a) at
+  /// [bitrate] bits/s, same sample rate and channel count. Progress through
+  /// AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
+  @async
+  MediaInfo encodeM4a(
+    String jobId,
+    String wavPath,
+    String outPath,
+    int bitrate,
+  );
+
+  /// Duration and format of an audio file as the platform sees it (for
+  /// verifying an export, and for the E2E tests).
+  @async
+  MediaInfo probeMedia(String path);
+
+  /// Lets the user pick a folder (Android SAF / iOS document picker) and
+  /// copies [paths] into it. Returns how many were saved; 0 if cancelled.
+  @async
+  int saveToFiles(List<String> paths);
+
+  /// iOS: begins/ends a background task so an export can finish when the app
+  /// is backgrounded. Android: no-op.
+  int beginBackgroundWork(String name);
+  void endBackgroundWork(int token);
 }
 
 @FlutterApi()

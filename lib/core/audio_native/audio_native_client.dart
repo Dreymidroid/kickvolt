@@ -4,7 +4,10 @@ import 'package:flutter/services.dart';
 
 import 'audio_api.g.dart';
 
-export 'audio_api.g.dart' show DecodeResult, LibraryTrack;
+export 'audio_api.g.dart' show DecodeResult, LibraryTrack, MediaInfo;
+
+/// Default bitrate for M4A (AAC-LC) exports: 192 kbps (§5.1).
+const int kDefaultM4aBitrate = 192000;
 
 /// Why a native audio call failed. Mirrors the error codes in
 /// `pigeons/audio_api.dart`.
@@ -14,6 +17,7 @@ enum AudioErrorKind {
   noAudioTrack,
   unsupportedFormat,
   decodeFailed,
+  encodeFailed,
   diskFull,
   permissionDenied,
   cancelled,
@@ -25,6 +29,7 @@ enum AudioErrorKind {
     'no_audio_track' => noAudioTrack,
     'unsupported_format' => unsupportedFormat,
     'decode_failed' => decodeFailed,
+    'encode_failed' => encodeFailed,
     'disk_full' => diskFull,
     'permission_denied' => permissionDenied,
     'cancelled' => cancelled,
@@ -65,6 +70,31 @@ abstract interface class AudioNative {
   Future<void> copyContentUri(String uri, String destPath);
 
   Future<int> freeDiskBytes(String path);
+
+  /// Encodes a 16-bit PCM WAV at [wavPath] to AAC in an MPEG-4 container
+  /// (.m4a) at [outPath] with [bitrate] bits/s, preserving sample rate and
+  /// channel count. Cancel with [cancel] using the same [jobId].
+  Future<MediaInfo> encodeM4a({
+    required String jobId,
+    required String wavPath,
+    required String outPath,
+    int bitrate = kDefaultM4aBitrate,
+    void Function(double fraction)? onProgress,
+  });
+
+  /// Probes duration and format of an audio file as the platform sees it.
+  Future<MediaInfo> probeMedia(String path);
+
+  /// Lets the user pick a folder (Android SAF / iOS document picker) and
+  /// copies [paths] into it. Returns how many were saved; 0 if cancelled.
+  Future<int> saveToFiles(List<String> paths);
+
+  /// iOS: begins a background task so an export can finish when the app is
+  /// backgrounded. Android: no-op (returns 0).
+  Future<int> beginBackgroundWork(String name);
+
+  /// iOS: ends a background task started by [beginBackgroundWork]. Android: no-op.
+  Future<void> endBackgroundWork(int token);
 }
 
 class AudioNativeClient implements AudioNative, AudioProgressApi {
@@ -114,6 +144,40 @@ class AudioNativeClient implements AudioNative, AudioProgressApi {
   @override
   Future<int> freeDiskBytes(String path) =>
       _guard(() => _host.freeDiskBytes(path));
+
+  @override
+  Future<MediaInfo> encodeM4a({
+    required String jobId,
+    required String wavPath,
+    required String outPath,
+    int bitrate = kDefaultM4aBitrate,
+    void Function(double fraction)? onProgress,
+  }) async {
+    if (onProgress != null) _progress[jobId] = onProgress;
+    try {
+      return await _guard(
+        () => _host.encodeM4a(jobId, wavPath, outPath, bitrate),
+      );
+    } finally {
+      _progress.remove(jobId);
+    }
+  }
+
+  @override
+  Future<MediaInfo> probeMedia(String path) =>
+      _guard(() => _host.probeMedia(path));
+
+  @override
+  Future<int> saveToFiles(List<String> paths) =>
+      _guard(() => _host.saveToFiles(paths));
+
+  @override
+  Future<int> beginBackgroundWork(String name) =>
+      _guard(() => _host.beginBackgroundWork(name));
+
+  @override
+  Future<void> endBackgroundWork(int token) =>
+      _guard(() => _host.endBackgroundWork(token));
 
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {

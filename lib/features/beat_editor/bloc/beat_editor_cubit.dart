@@ -1333,6 +1333,8 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
     _saveTimer = Timer(saveDebounce, _flushPendingSave);
   }
 
+  Future<void> flushPendingSave() => _flushPendingSave();
+
   Future<void> _flushPendingSave() {
     _saveTimer?.cancel();
     _saveTimer = null;

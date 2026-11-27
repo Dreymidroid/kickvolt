@@ -296,6 +296,58 @@ struct LibraryTrack: Hashable, CustomStringConvertible {
   }
 }
 
+/// Duration and format of an audio file as the platform sees it.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct MediaInfo: Hashable, CustomStringConvertible {
+  var sampleRate: Int64
+  var channels: Int64
+  var durationUs: Int64
+  var frameCount: Int64? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> MediaInfo? {
+    let sampleRate = pigeonVar_list[0] as! Int64
+    let channels = pigeonVar_list[1] as! Int64
+    let durationUs = pigeonVar_list[2] as! Int64
+    let frameCount: Int64? = nilOrValue(pigeonVar_list[3])
+
+    return MediaInfo(
+      sampleRate: sampleRate,
+      channels: channels,
+      durationUs: durationUs,
+      frameCount: frameCount
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      sampleRate,
+      channels,
+      durationUs,
+      frameCount,
+    ]
+  }
+  static func == (lhs: MediaInfo, rhs: MediaInfo) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return AudioApiPigeonInternal.deepEquals(lhs.sampleRate, rhs.sampleRate) && AudioApiPigeonInternal.deepEquals(lhs.channels, rhs.channels) && AudioApiPigeonInternal.deepEquals(lhs.durationUs, rhs.durationUs) && AudioApiPigeonInternal.deepEquals(lhs.frameCount, rhs.frameCount)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("MediaInfo")
+    AudioApiPigeonInternal.deepHash(value: sampleRate, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: channels, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: durationUs, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: frameCount, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "MediaInfo(sampleRate: \(String(describing: sampleRate)), channels: \(String(describing: channels)), durationUs: \(String(describing: durationUs)), frameCount: \(String(describing: frameCount)))"
+  }
+}
+
 private class AudioApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -303,6 +355,8 @@ private class AudioApiPigeonCodecReader: FlutterStandardReader {
       return DecodeResult.fromList(self.readValue() as! [Any?])
     case 130:
       return LibraryTrack.fromList(self.readValue() as! [Any?])
+    case 131:
+      return MediaInfo.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -316,6 +370,9 @@ private class AudioApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.toList())
     } else if let value = value as? LibraryTrack {
       super.writeByte(130)
+      super.writeValue(value.toList())
+    } else if let value = value as? MediaInfo {
+      super.writeByte(131)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -341,8 +398,8 @@ class AudioApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 /// Native audio work. Long jobs run off the platform main thread and report
 /// progress through [AudioProgressApi]. Failures are PlatformExceptions with
 /// one of these codes: `drm_protected`, `cloud_item`, `no_audio_track`,
-/// `unsupported_format`, `decode_failed`, `disk_full`, `permission_denied`,
-/// `cancelled`.
+/// `unsupported_format`, `decode_failed`, `encode_failed`, `disk_full`,
+/// `permission_denied`, `cancelled`.
 ///
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol AudioHostApi {
@@ -363,6 +420,20 @@ protocol AudioHostApi {
   func copyContentUri(uri: String, destPath: String) async throws
   /// Free bytes on the volume holding [path].
   func freeDiskBytes(path: String) throws -> Int64
+  /// Encodes a 16-bit PCM WAV to AAC in an MPEG-4 container (.m4a) at
+  /// [bitrate] bits/s, same sample rate and channel count. Progress through
+  /// AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
+  func encodeM4a(jobId: String, wavPath: String, outPath: String, bitrate: Int64) async throws -> MediaInfo
+  /// Duration and format of an audio file as the platform sees it (for
+  /// verifying an export, and for the E2E tests).
+  func probeMedia(path: String) async throws -> MediaInfo
+  /// Lets the user pick a folder (Android SAF / iOS document picker) and
+  /// copies [paths] into it. Returns how many were saved; 0 if cancelled.
+  func saveToFiles(paths: [String]) async throws -> Int64
+  /// iOS: begins/ends a background task so an export can finish when the app
+  /// is backgrounded. Android: no-op.
+  func beginBackgroundWork(name: String) throws -> Int64
+  func endBackgroundWork(token: Int64) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -478,6 +549,99 @@ class AudioHostApiSetup {
       }
     } else {
       freeDiskBytesChannel.setMessageHandler(nil)
+    }
+    /// Encodes a 16-bit PCM WAV to AAC in an MPEG-4 container (.m4a) at
+    /// [bitrate] bits/s, same sample rate and channel count. Progress through
+    /// AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
+    let encodeM4aChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.encodeM4a\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      encodeM4aChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let jobIdArg = args[0] as! String
+        let wavPathArg = args[1] as! String
+        let outPathArg = args[2] as! String
+        let bitrateArg = args[3] as! Int64
+        Task { @MainActor in
+          do {
+            let result = try await api.encodeM4a(jobId: jobIdArg, wavPath: wavPathArg, outPath: outPathArg, bitrate: bitrateArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      encodeM4aChannel.setMessageHandler(nil)
+    }
+    /// Duration and format of an audio file as the platform sees it (for
+    /// verifying an export, and for the E2E tests).
+    let probeMediaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.probeMedia\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      probeMediaChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pathArg = args[0] as! String
+        Task { @MainActor in
+          do {
+            let result = try await api.probeMedia(path: pathArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      probeMediaChannel.setMessageHandler(nil)
+    }
+    /// Lets the user pick a folder (Android SAF / iOS document picker) and
+    /// copies [paths] into it. Returns how many were saved; 0 if cancelled.
+    let saveToFilesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.saveToFiles\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      saveToFilesChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let pathsArg = args[0] as! [String]
+        Task { @MainActor in
+          do {
+            let result = try await api.saveToFiles(paths: pathsArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      saveToFilesChannel.setMessageHandler(nil)
+    }
+    /// iOS: begins/ends a background task so an export can finish when the app
+    /// is backgrounded. Android: no-op.
+    let beginBackgroundWorkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.beginBackgroundWork\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      beginBackgroundWorkChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let nameArg = args[0] as! String
+        do {
+          let result = try api.beginBackgroundWork(name: nameArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      beginBackgroundWorkChannel.setMessageHandler(nil)
+    }
+    let endBackgroundWorkChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.endBackgroundWork\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      endBackgroundWorkChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let tokenArg = args[0] as! Int64
+        do {
+          try api.endBackgroundWork(token: tokenArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      endBackgroundWorkChannel.setMessageHandler(nil)
     }
   }
 }

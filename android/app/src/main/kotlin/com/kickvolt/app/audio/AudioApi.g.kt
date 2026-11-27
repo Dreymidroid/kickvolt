@@ -312,6 +312,59 @@ data class LibraryTrack (
     return "LibraryTrack(id=$id, title=$title, artist=$artist, durationMs=$durationMs, uri=$uri)"
   }
 }
+
+/**
+ * Duration and format of an audio file as the platform sees it.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class MediaInfo (
+  val sampleRate: Long,
+  val channels: Long,
+  val durationUs: Long,
+  val frameCount: Long? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): MediaInfo {
+      val sampleRate = pigeonVar_list[0] as Long
+      val channels = pigeonVar_list[1] as Long
+      val durationUs = pigeonVar_list[2] as Long
+      val frameCount = pigeonVar_list[3] as Long?
+      return MediaInfo(sampleRate, channels, durationUs, frameCount)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      sampleRate,
+      channels,
+      durationUs,
+      frameCount,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as MediaInfo
+    return AudioApiPigeonUtils.deepEquals(this.sampleRate, other.sampleRate) && AudioApiPigeonUtils.deepEquals(this.channels, other.channels) && AudioApiPigeonUtils.deepEquals(this.durationUs, other.durationUs) && AudioApiPigeonUtils.deepEquals(this.frameCount, other.frameCount)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.sampleRate)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.channels)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.durationUs)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.frameCount)
+    return result
+  }
+  override fun toString(): String {
+    return "MediaInfo(sampleRate=$sampleRate, channels=$channels, durationUs=$durationUs, frameCount=$frameCount)"
+  }
+}
 private open class AudioApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -323,6 +376,11 @@ private open class AudioApiPigeonCodec : StandardMessageCodec() {
       130.toByte() -> {
         (readValue(buffer) as? List<Any?>)?.let {
           LibraryTrack.fromList(it)
+        }
+      }
+      131.toByte() -> {
+        (readValue(buffer) as? List<Any?>)?.let {
+          MediaInfo.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -338,6 +396,10 @@ private open class AudioApiPigeonCodec : StandardMessageCodec() {
         stream.write(130)
         writeValue(stream, value.toList())
       }
+      is MediaInfo -> {
+        stream.write(131)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
@@ -348,8 +410,8 @@ private open class AudioApiPigeonCodec : StandardMessageCodec() {
  * Native audio work. Long jobs run off the platform main thread and report
  * progress through [AudioProgressApi]. Failures are PlatformExceptions with
  * one of these codes: `drm_protected`, `cloud_item`, `no_audio_track`,
- * `unsupported_format`, `decode_failed`, `disk_full`, `permission_denied`,
- * `cancelled`.
+ * `unsupported_format`, `decode_failed`, `encode_failed`, `disk_full`,
+ * `permission_denied`, `cancelled`.
  *
  * Generated interface from Pigeon that represents a handler of messages from Flutter.
  */
@@ -377,6 +439,28 @@ interface AudioHostApi {
   suspend fun copyContentUri(uri: String, destPath: String)
   /** Free bytes on the volume holding [path]. */
   fun freeDiskBytes(path: String): Long
+  /**
+   * Encodes a 16-bit PCM WAV to AAC in an MPEG-4 container (.m4a) at
+   * [bitrate] bits/s, same sample rate and channel count. Progress through
+   * AudioProgressApi. Fails with `disk_full`, `encode_failed`, `cancelled`.
+   */
+  suspend fun encodeM4a(jobId: String, wavPath: String, outPath: String, bitrate: Long): MediaInfo
+  /**
+   * Duration and format of an audio file as the platform sees it (for
+   * verifying an export, and for the E2E tests).
+   */
+  suspend fun probeMedia(path: String): MediaInfo
+  /**
+   * Lets the user pick a folder (Android SAF / iOS document picker) and
+   * copies [paths] into it. Returns how many were saved; 0 if cancelled.
+   */
+  suspend fun saveToFiles(paths: List<String>): Long
+  /**
+   * iOS: begins/ends a background task so an export can finish when the app
+   * is backgrounded. Android: no-op.
+   */
+  fun beginBackgroundWork(name: String): Long
+  fun endBackgroundWork(token: Long)
 
   companion object {
     /** The codec used by AudioHostApi. */
@@ -489,6 +573,101 @@ interface AudioHostApi {
             val pathArg = args[0] as String
             val wrapped: List<Any?> = try {
               listOf(api.freeDiskBytes(pathArg))
+            } catch (exception: Throwable) {
+              AudioApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.encodeM4a$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val jobIdArg = args[0] as String
+            val wavPathArg = args[1] as String
+            val outPathArg = args[2] as String
+            val bitrateArg = args[3] as Long
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.encodeM4a(jobIdArg, wavPathArg, outPathArg, bitrateArg))
+              } catch (exception: Throwable) {
+                AudioApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.probeMedia$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathArg = args[0] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.probeMedia(pathArg))
+              } catch (exception: Throwable) {
+                AudioApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.saveToFiles$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathsArg = args[0] as List<String>
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.saveToFiles(pathsArg))
+              } catch (exception: Throwable) {
+                AudioApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.beginBackgroundWork$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val nameArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              listOf(api.beginBackgroundWork(nameArg))
+            } catch (exception: Throwable) {
+              AudioApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.endBackgroundWork$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val tokenArg = args[0] as Long
+            val wrapped: List<Any?> = try {
+              api.endBackgroundWork(tokenArg)
+              listOf(null)
             } catch (exception: Throwable) {
               AudioApiPigeonUtils.wrapError(exception)
             }
