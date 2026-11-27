@@ -36,6 +36,15 @@ void main() {
     links = _Links();
   });
 
+  /// The toggle's own `Semantics(toggled:)` node (the row's list-item
+  /// semantics carries the same label).
+  Finder toggle(String label) => find.byWidgetPredicate(
+    (w) =>
+        w is Semantics &&
+        w.properties.label == label &&
+        w.properties.toggled != null,
+  );
+
   Future<SettingsCubit> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(390, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -43,8 +52,10 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
+    // SettingsScreen's BlocProvider(create:) owns the cubit and closes it on
+    // unmount. Closing it again in addTearDown runs outside fake time and
+    // never completes (the test hangs until its timeout).
     final cubit = SettingsCubit(repository: repo, linkService: links)..load();
-    addTearDown(cubit.close);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.dark(),
@@ -95,15 +106,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.current.defaultSensitivity, 0.75);
 
-    await tester.tap(find.bySemanticsLabel('Haptics'));
+    await tester.tap(toggle('Haptics'));
     await tester.pump();
     expect(repo.current.hapticsEnabled, isFalse);
 
-    await tester.tap(find.bySemanticsLabel('Mono guide track (smaller file)'));
+    await tester.tap(toggle('Mono guide track (smaller file)'));
     await tester.pump();
     expect(repo.current.monoGuideTrack, isTrue);
 
-    await tester.tap(find.bySemanticsLabel('Preview mix in packs'));
+    await tester.tap(toggle('Preview mix in packs'));
     await tester.pump();
     expect(repo.current.includePreviewByDefault, isTrue);
   });

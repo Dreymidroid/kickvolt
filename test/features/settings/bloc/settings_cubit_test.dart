@@ -38,8 +38,7 @@ void main() {
     links = _RecordingLinks();
   });
 
-  SettingsCubit build() =>
-      SettingsCubit(repository: repo, linkService: links);
+  SettingsCubit build() => SettingsCubit(repository: repo, linkService: links);
 
   blocTest<SettingsCubit, SettingsState>(
     'load emits loading then ready with stored settings',
@@ -81,10 +80,7 @@ void main() {
     });
 
     test('mono guide track', () async {
-      await check(
-        (c) => c.setMonoGuideTrack(true),
-        (s) => s.monoGuideTrack,
-      );
+      await check((c) => c.setMonoGuideTrack(true), (s) => s.monoGuideTrack);
     });
 
     test('preview mix in packs', () async {
@@ -96,10 +92,7 @@ void main() {
     });
 
     test('haptics', () async {
-      await check(
-        (c) => c.setHapticsEnabled(false),
-        (s) => !s.hapticsEnabled,
-      );
+      await check((c) => c.setHapticsEnabled(false), (s) => !s.hapticsEnabled);
     });
 
     for (final preset in SensitivityPreset.values) {
