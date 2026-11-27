@@ -8,6 +8,9 @@ import 'package:kickvolt/core/audio_math/wav_header.dart';
 import 'package:kickvolt/core/storage/project_paths.dart';
 import 'package:kickvolt/features/import/import.dart';
 import 'package:kickvolt/features/projects/projects.dart';
+import 'package:kickvolt/features/settings/settings.dart';
+
+import '../../../fixtures/editor_fakes.dart';
 
 void main() {
   late Directory docs;
@@ -362,4 +365,37 @@ void main() {
       }
     }
   });
+
+  test(
+    'createFromImport uses defaultSensitivity from SettingsRepository',
+    () async {
+      final settings = FakeSettingsRepository(
+        const AppSettings(defaultSensitivity: 0.25),
+      );
+      final repoWithSettings = ProjectRepositoryImpl(
+        paths: () async => paths,
+        settingsRepository: settings,
+        clock: () => now,
+      );
+
+      final lowProject = await repoWithSettings.createFromImport(
+        prepareImportedSong('p_low'),
+      );
+      expect(lowProject.detection.sensitivity, 0.25);
+      expect(
+        (await repoWithSettings.getProject('p_low')).detection.sensitivity,
+        0.25,
+      );
+
+      await settings.save(const AppSettings(defaultSensitivity: 0.75));
+      final highProject = await repoWithSettings.createFromImport(
+        prepareImportedSong('p_high'),
+      );
+      expect(highProject.detection.sensitivity, 0.75);
+      expect(
+        (await repoWithSettings.getProject('p_high')).detection.sensitivity,
+        0.75,
+      );
+    },
+  );
 }

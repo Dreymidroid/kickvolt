@@ -9,7 +9,7 @@ part 'app_settings.freezed.dart';
 /// Bluetooth delay warnings (§6.1, §6.3).
 enum OutputKind { unknown, builtIn, wired, bluetooth }
 
-/// Persisted user settings (§6.1).
+/// Persisted user settings (§6.1, M8 §4.1, M8 §5).
 ///
 /// Latency offset is stored in milliseconds (never sample frames) because
 /// different songs can have different sample rates; convert per project with
@@ -28,10 +28,21 @@ abstract class AppSettings with _$AppSettings {
     /// Global haptics switch (§6.2).
     @Default(true) bool hapticsEnabled,
 
-    /// Export defaults (§6.4). The Export screen starts from these.
+    /// Export defaults (§6.4, M8 §5). The Export screen starts from these.
     @Default(ClickStyle.snap) ClickStyle defaultClickStyle,
     @Default(AudioFormat.wav) AudioFormat defaultAudioFormat,
     @Default(false) bool includePreviewByDefault,
     @Default(false) bool monoGuideTrack,
+
+    /// Default beat-detection sensitivity for newly created projects (`0.25`
+    /// Low, `0.5` Balanced, `0.75` High).
+    @Default(0.5) double defaultSensitivity,
+
+    /// Whether first-run onboarding has been completed or skipped (M8 §4.1).
+    @Default(false) bool onboardingDone,
+
+    /// Whether first-run editor coach marks have been completed or skipped
+    /// (M8 §4.1, §4.3).
+    @Default(false) bool coachMarksDone,
   }) = _AppSettings;
 }

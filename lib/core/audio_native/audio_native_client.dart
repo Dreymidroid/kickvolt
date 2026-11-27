@@ -66,6 +66,10 @@ abstract interface class AudioNative {
   /// Android MediaStore songs.
   Future<List<LibraryTrack>> listMusicLibrary();
 
+  /// Requests runtime audio/music-library permission. Returns `true` if
+  /// granted, `false` if denied.
+  Future<bool> requestAudioPermission();
+
   /// Android: copy a `content://` URI into app storage.
   Future<void> copyContentUri(String uri, String destPath);
 
@@ -136,6 +140,9 @@ class AudioNativeClient implements AudioNative, AudioProgressApi {
   @override
   Future<List<LibraryTrack>> listMusicLibrary() =>
       _guard(_host.listMusicLibrary);
+
+  @override
+  Future<bool> requestAudioPermission() => _guard(_host.requestAudioPermission);
 
   @override
   Future<void> copyContentUri(String uri, String destPath) =>

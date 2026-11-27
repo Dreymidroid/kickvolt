@@ -10,6 +10,7 @@ import '../../../../core/audio_math/peaks.dart';
 import '../../../../core/audio_math/wav_header.dart';
 import '../../../../core/storage/project_paths.dart';
 import '../../../import/domain/entities/imported_song.dart';
+import '../../../settings/data/repositories/settings_repository.dart';
 import '../../domain/entities/detection_settings.dart';
 import '../../domain/entities/project.dart';
 import '../../domain/entities/project_exception.dart';
@@ -51,10 +52,14 @@ abstract interface class ProjectRepository {
 }
 
 class ProjectRepositoryImpl implements ProjectRepository {
-  ProjectRepositoryImpl({required this._paths, DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  ProjectRepositoryImpl({
+    required this._paths,
+    this._settingsRepository,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final Future<ProjectPaths> Function() _paths;
+  final SettingsRepository? _settingsRepository;
   final DateTime Function() _clock;
 
   /// Atomic writes share `<name>.tmp`, so they must not interleave.
@@ -90,6 +95,9 @@ class ProjectRepositoryImpl implements ProjectRepository {
       final copiedName = song.sourceCopyPath != null
           ? p.basename(song.sourceCopyPath!)
           : null;
+      final defaultSensitivity = _settingsRepository != null
+          ? (await _settingsRepository.load()).defaultSensitivity
+          : 0.5;
       final project = Project(
         id: id,
         title: song.title,
@@ -105,7 +113,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
         sections: const [],
         bpm: null,
         beatPhaseSample: null,
-        detection: const DetectionSettings(),
+        detection: DetectionSettings(sensitivity: defaultSensitivity),
         createdAt: now,
         updatedAt: now,
       );

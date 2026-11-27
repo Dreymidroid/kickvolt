@@ -7,11 +7,17 @@ import 'app/app.dart';
 import 'core/core.dart';
 import 'features/export/data/repositories/export_repository.dart';
 import 'features/projects/data/repositories/project_repository.dart';
+import 'features/settings/data/repositories/settings_repository.dart';
 import 'shared/shared.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setupLocator();
+  try {
+    await locator<SettingsRepository>().load();
+  } catch (e) {
+    developer.log('Settings load failed: $e', name: 'main');
+  }
   try {
     await locator<ProjectRepository>().cleanUpOrphans().timeout(
       const Duration(milliseconds: 500),

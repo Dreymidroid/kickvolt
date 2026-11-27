@@ -92,6 +92,14 @@ abstract class AudioHostApi {
   @async
   List<LibraryTrack> listMusicLibrary();
 
+  /// Requests runtime permission for music/audio library access without
+  /// opening a picker (Android `READ_MEDIA_AUDIO` on API 33+,
+  /// `READ_EXTERNAL_STORAGE` on API <= 32; iOS
+  /// `MPMediaLibrary.requestAuthorization`). Returns `true` if granted,
+  /// `false` if denied.
+  @async
+  bool requestAudioPermission();
+
   /// Android only: copies a `content://` URI to [destPath].
   @async
   void copyContentUri(String uri, String destPath);

@@ -7,10 +7,16 @@ import '../../bloc/beat_editor_cubit.dart';
 import 'timeline_painter.dart' show formatClock;
 
 class EditorTopBar extends StatelessWidget {
-  const EditorTopBar({super.key, required this.state, this.onExport});
+  const EditorTopBar({
+    super.key,
+    required this.state,
+    this.onExport,
+    this.exportButtonKey,
+  });
 
   final BeatEditorReady state;
   final VoidCallback? onExport;
+  final Key? exportButtonKey;
 
   static String _formatBpm(double bpm) =>
       bpm == bpm.roundToDouble() ? '${bpm.round()}' : bpm.toStringAsFixed(1);
@@ -81,6 +87,7 @@ class EditorTopBar extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Material(
+              key: exportButtonKey,
               color: hasBeats ? kv.volt : kv.surface2,
               shape: const StadiumBorder(),
               clipBehavior: Clip.antiAlias,

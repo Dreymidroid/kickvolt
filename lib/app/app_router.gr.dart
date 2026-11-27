@@ -249,6 +249,55 @@ class HomeRouteArgs {
 }
 
 /// generated route for
+/// [HowToScreen]
+class HowToRoute extends PageRouteInfo<HowToRouteArgs> {
+  HowToRoute({
+    Key? key,
+    HowToTab initialTab = HowToTab.capCut,
+    List<PageRouteInfo>? children,
+  }) : super(
+         HowToRoute.name,
+         args: HowToRouteArgs(key: key, initialTab: initialTab),
+         initialChildren: children,
+       );
+
+  static const String name = 'HowToRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<HowToRouteArgs>(
+        orElse: () => const HowToRouteArgs(),
+      );
+      return HowToScreen(key: args.key, initialTab: args.initialTab);
+    },
+  );
+}
+
+class HowToRouteArgs {
+  const HowToRouteArgs({this.key, this.initialTab = HowToTab.capCut});
+
+  final Key? key;
+
+  final HowToTab initialTab;
+
+  @override
+  String toString() {
+    return 'HowToRouteArgs{key: $key, initialTab: $initialTab}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! HowToRouteArgs) return false;
+    return key == other.key && initialTab == other.initialTab;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ initialTab.hashCode;
+}
+
+/// generated route for
 /// [LatencyCalibrationScreen]
 class LatencyCalibrationRoute
     extends PageRouteInfo<LatencyCalibrationRouteArgs> {
@@ -291,6 +340,114 @@ class LatencyCalibrationRouteArgs {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! LatencyCalibrationRouteArgs) return false;
+    return key == other.key && cubit == other.cubit;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ cubit.hashCode;
+}
+
+/// generated route for
+/// [OnboardingScreen]
+class OnboardingRoute extends PageRouteInfo<OnboardingRouteArgs> {
+  OnboardingRoute({
+    Key? key,
+    OnboardingCubit? cubit,
+    VoidCallback? onCompleted,
+    List<PageRouteInfo>? children,
+  }) : super(
+         OnboardingRoute.name,
+         args: OnboardingRouteArgs(
+           key: key,
+           cubit: cubit,
+           onCompleted: onCompleted,
+         ),
+         initialChildren: children,
+       );
+
+  static const String name = 'OnboardingRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<OnboardingRouteArgs>(
+        orElse: () => const OnboardingRouteArgs(),
+      );
+      return OnboardingScreen(
+        key: args.key,
+        cubit: args.cubit,
+        onCompleted: args.onCompleted,
+      );
+    },
+  );
+}
+
+class OnboardingRouteArgs {
+  const OnboardingRouteArgs({this.key, this.cubit, this.onCompleted});
+
+  final Key? key;
+
+  final OnboardingCubit? cubit;
+
+  final VoidCallback? onCompleted;
+
+  @override
+  String toString() {
+    return 'OnboardingRouteArgs{key: $key, cubit: $cubit, onCompleted: $onCompleted}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! OnboardingRouteArgs) return false;
+    return key == other.key &&
+        cubit == other.cubit &&
+        onCompleted == other.onCompleted;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ cubit.hashCode ^ onCompleted.hashCode;
+}
+
+/// generated route for
+/// [SettingsScreen]
+class SettingsRoute extends PageRouteInfo<SettingsRouteArgs> {
+  SettingsRoute({Key? key, SettingsCubit? cubit, List<PageRouteInfo>? children})
+    : super(
+        SettingsRoute.name,
+        args: SettingsRouteArgs(key: key, cubit: cubit),
+        initialChildren: children,
+      );
+
+  static const String name = 'SettingsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<SettingsRouteArgs>(
+        orElse: () => const SettingsRouteArgs(),
+      );
+      return SettingsScreen(key: args.key, cubit: args.cubit);
+    },
+  );
+}
+
+class SettingsRouteArgs {
+  const SettingsRouteArgs({this.key, this.cubit});
+
+  final Key? key;
+
+  final SettingsCubit? cubit;
+
+  @override
+  String toString() {
+    return 'SettingsRouteArgs{key: $key, cubit: $cubit}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! SettingsRouteArgs) return false;
     return key == other.key && cubit == other.cubit;
   }
 

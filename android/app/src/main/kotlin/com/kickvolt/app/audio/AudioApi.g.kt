@@ -435,6 +435,14 @@ interface AudioHostApi {
    * first if needed. Fails with `permission_denied`.
    */
   suspend fun listMusicLibrary(): List<LibraryTrack>
+  /**
+   * Requests runtime permission for music/audio library access without
+   * opening a picker (Android `READ_MEDIA_AUDIO` on API 33+,
+   * `READ_EXTERNAL_STORAGE` on API <= 32; iOS
+   * `MPMediaLibrary.requestAuthorization`). Returns `true` if granted,
+   * `false` if denied.
+   */
+  suspend fun requestAudioPermission(): Boolean
   /** Android only: copies a `content://` URI to [destPath]. */
   suspend fun copyContentUri(uri: String, destPath: String)
   /** Free bytes on the volume holding [path]. */
@@ -534,6 +542,23 @@ interface AudioHostApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.listMusicLibrary())
+              } catch (exception: Throwable) {
+                AudioApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.requestAudioPermission$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.requestAudioPermission())
               } catch (exception: Throwable) {
                 AudioApiPigeonUtils.wrapError(exception)
               }

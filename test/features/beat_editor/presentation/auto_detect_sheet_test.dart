@@ -80,7 +80,9 @@ void main() {
     final p = project ?? createDemoProject();
     final repo = FakeDemoProjectRepository(p);
     final player = FakeAudioPlayback();
-    final settings = FakeSettingsRepository(const AppSettings());
+    final settings = FakeSettingsRepository(
+      const AppSettings(coachMarksDone: true),
+    );
     final outputRoute = FakeOutputRouteService(kind: OutputKind.builtIn);
     final haptics = RecordingHaptics(settings: settings);
     final previewRepo = FakeClickPreviewRepository();

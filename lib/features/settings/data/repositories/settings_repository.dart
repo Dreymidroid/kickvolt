@@ -9,7 +9,7 @@ import '../../../export/domain/entities/export_options.dart';
 import '../../domain/entities/app_settings.dart';
 import '../../domain/latency_calibration.dart';
 
-/// Persists [AppSettings] scalar values (§6.1).
+/// Persists [AppSettings] scalar values (§6.1, M8 §4.1, M8 §5).
 abstract interface class SettingsRepository {
   /// Returns the currently loaded settings synchronously (defaults until
   /// [load] has been called).
@@ -18,8 +18,8 @@ abstract interface class SettingsRepository {
   /// Loads settings from persistent storage.
   Future<AppSettings> load();
 
-  /// Saves [settings] (clamping `latencyOffsetMs` to `[-100, 500]`) and
-  /// updates [current].
+  /// Saves [settings] (clamping `latencyOffsetMs` to `[-100, 500]` and
+  /// `defaultSensitivity` to `[0.0, 1.0]`) and updates [current].
   Future<AppSettings> save(AppSettings settings);
 }
 
@@ -34,6 +34,9 @@ class SettingsRepositoryImpl implements SettingsRepository {
   static const String DEFAULT_AUDIO_FORMAT = 'DEFAULT_AUDIO_FORMAT';
   static const String INCLUDE_PREVIEW_BY_DEFAULT = 'INCLUDE_PREVIEW_BY_DEFAULT';
   static const String MONO_GUIDE_TRACK = 'MONO_GUIDE_TRACK';
+  static const String DEFAULT_SENSITIVITY = 'DEFAULT_SENSITIVITY';
+  static const String ONBOARDING_DONE = 'ONBOARDING_DONE';
+  static const String COACH_MARKS_DONE = 'COACH_MARKS_DONE';
 
   final Future<SharedPreferences> Function() _prefsProvider;
   AppSettings _current = const AppSettings();
@@ -60,6 +63,8 @@ class SettingsRepositoryImpl implements SettingsRepository {
     final format = AudioFormat.values
         .where((f) => f.name == prefs.getString(DEFAULT_AUDIO_FORMAT))
         .firstOrNull;
+    final rawSensitivity = prefs.getDouble(DEFAULT_SENSITIVITY) ?? 0.5;
+    final clampedSensitivity = rawSensitivity.clamp(0.0, 1.0);
 
     _current = AppSettings(
       latencyOffsetMs: clampedOffset,
@@ -70,6 +75,9 @@ class SettingsRepositoryImpl implements SettingsRepository {
       includePreviewByDefault:
           prefs.getBool(INCLUDE_PREVIEW_BY_DEFAULT) ?? false,
       monoGuideTrack: prefs.getBool(MONO_GUIDE_TRACK) ?? false,
+      defaultSensitivity: clampedSensitivity,
+      onboardingDone: prefs.getBool(ONBOARDING_DONE) ?? false,
+      coachMarksDone: prefs.getBool(COACH_MARKS_DONE) ?? false,
     );
     return _current;
   }
@@ -81,6 +89,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
         kLatencyOffsetMinMs,
         kLatencyOffsetMaxMs,
       ),
+      defaultSensitivity: settings.defaultSensitivity.clamp(0.0, 1.0),
     );
     final prefs = await _prefsProvider();
     await prefs.setInt(LATENCY_OFFSET_MS, clamped.latencyOffsetMs);
@@ -101,6 +110,9 @@ class SettingsRepositoryImpl implements SettingsRepository {
       clamped.includePreviewByDefault,
     );
     await prefs.setBool(MONO_GUIDE_TRACK, clamped.monoGuideTrack);
+    await prefs.setDouble(DEFAULT_SENSITIVITY, clamped.defaultSensitivity);
+    await prefs.setBool(ONBOARDING_DONE, clamped.onboardingDone);
+    await prefs.setBool(COACH_MARKS_DONE, clamped.coachMarksDone);
     _current = clamped;
     return clamped;
   }

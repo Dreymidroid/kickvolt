@@ -416,6 +416,12 @@ protocol AudioHostApi {
   /// Android only: songs in MediaStore, asking for the audio permission
   /// first if needed. Fails with `permission_denied`.
   func listMusicLibrary() async throws -> [LibraryTrack]
+  /// Requests runtime permission for music/audio library access without
+  /// opening a picker (Android `READ_MEDIA_AUDIO` on API 33+,
+  /// `READ_EXTERNAL_STORAGE` on API <= 32; iOS
+  /// `MPMediaLibrary.requestAuthorization`). Returns `true` if granted,
+  /// `false` if denied.
+  func requestAudioPermission() async throws -> Bool
   /// Android only: copies a `content://` URI to [destPath].
   func copyContentUri(uri: String, destPath: String) async throws
   /// Free bytes on the volume holding [path].
@@ -514,6 +520,26 @@ class AudioHostApiSetup {
       }
     } else {
       listMusicLibraryChannel.setMessageHandler(nil)
+    }
+    /// Requests runtime permission for music/audio library access without
+    /// opening a picker (Android `READ_MEDIA_AUDIO` on API 33+,
+    /// `READ_EXTERNAL_STORAGE` on API <= 32; iOS
+    /// `MPMediaLibrary.requestAuthorization`). Returns `true` if granted,
+    /// `false` if denied.
+    let requestAudioPermissionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.requestAudioPermission\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestAudioPermissionChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            let result = try await api.requestAudioPermission()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestAudioPermissionChannel.setMessageHandler(nil)
     }
     /// Android only: copies a `content://` URI to [destPath].
     let copyContentUriChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.copyContentUri\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

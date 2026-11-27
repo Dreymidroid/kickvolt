@@ -19,6 +19,9 @@ void main() {
       expect(s.defaultAudioFormat, AudioFormat.wav);
       expect(s.includePreviewByDefault, isFalse);
       expect(s.monoGuideTrack, isFalse);
+      expect(s.defaultSensitivity, 0.5);
+      expect(s.onboardingDone, isFalse);
+      expect(s.coachMarksDone, isFalse);
       expect(repo.current, s);
     });
 
@@ -34,6 +37,9 @@ void main() {
           defaultAudioFormat: AudioFormat.m4a,
           includePreviewByDefault: true,
           monoGuideTrack: true,
+          defaultSensitivity: 0.75,
+          onboardingDone: true,
+          coachMarksDone: true,
         ),
       );
 
@@ -46,6 +52,9 @@ void main() {
       expect(loaded.defaultAudioFormat, AudioFormat.m4a);
       expect(loaded.includePreviewByDefault, isTrue);
       expect(loaded.monoGuideTrack, isTrue);
+      expect(loaded.defaultSensitivity, 0.75);
+      expect(loaded.onboardingDone, isTrue);
+      expect(loaded.coachMarksDone, isTrue);
     });
 
     test('clamps latencyOffsetMs to [-100, 500] on save and load', () async {
@@ -61,6 +70,20 @@ void main() {
       );
       expect(savedLow.latencyOffsetMs, -100);
       expect(repo.current.latencyOffsetMs, -100);
+    });
+
+    test('clamps defaultSensitivity to [0.0, 1.0] on save and load', () async {
+      SharedPreferences.setMockInitialValues({
+        SettingsRepositoryImpl.DEFAULT_SENSITIVITY: 2.5,
+      });
+      final repo = SettingsRepositoryImpl();
+      expect((await repo.load()).defaultSensitivity, 1.0);
+
+      final savedLow = await repo.save(
+        const AppSettings(defaultSensitivity: -0.5),
+      );
+      expect(savedLow.defaultSensitivity, 0.0);
+      expect(repo.current.defaultSensitivity, 0.0);
     });
 
     test('a calibration on an unknown route is kept as calibrated', () async {

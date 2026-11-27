@@ -98,6 +98,8 @@ class BeatEditorCubit extends Cubit<BeatEditorState> {
   final ClickPreviewRepository? _clickPreview;
   final SettingsRepository? _settings;
   final OutputRouteService? _outputRoute;
+
+  SettingsRepository? get settingsRepository => _settings;
   final Haptics _haptics;
   final Duration saveDebounce;
   final Duration clickPreviewDebounce;

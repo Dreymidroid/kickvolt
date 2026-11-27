@@ -68,11 +68,15 @@ final class AudioHostApiImpl: AudioHostApi {
 
   // MARK: Music library
 
-  func pickFromMusicLibrary() async throws -> LibraryTrack? {
+  func requestAudioPermission() async throws -> Bool {
     let status: MPMediaLibraryAuthorizationStatus = await withCheckedContinuation { c in
       MPMediaLibrary.requestAuthorization { c.resume(returning: $0) }
     }
-    guard status == .authorized else {
+    return status == .authorized
+  }
+
+  func pickFromMusicLibrary() async throws -> LibraryTrack? {
+    guard try await requestAudioPermission() else {
       throw audioError(
         "permission_denied", "Allow KickVolt to access your music in Settings to import songs.")
     }

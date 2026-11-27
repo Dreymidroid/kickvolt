@@ -2,7 +2,6 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../../app/app_constants.dart';
 import '../../../../app/app_router.dart';
 import '../../../../shared/shared.dart';
 import '../../../import/import.dart';
@@ -349,23 +348,25 @@ class _EmptyHomeBody extends StatelessWidget {
           const Spacer(flex: 4),
           _ImportButton(onImport: onImport),
           const SizedBox(height: 8),
-          // How-to guide arrives in M8.
-          SizedBox(
-            height: 48,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                KvIcon(KvIcons.help, size: 20, color: kv.text3),
-                const SizedBox(width: 8),
-                Text(
-                  'How beat packs work',
-                  style: KvText.ui(
-                    size: 16,
-                    weight: FontWeight.w600,
-                    color: kv.text3,
+          InkWell(
+            onTap: () => context.router.push(HowToRoute()),
+            child: SizedBox(
+              height: 48,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  KvIcon(KvIcons.help, size: 20, color: kv.text3),
+                  const SizedBox(width: 8),
+                  Text(
+                    'How beat packs work',
+                    style: KvText.ui(
+                      size: 16,
+                      weight: FontWeight.w600,
+                      color: kv.text3,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -425,45 +426,10 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 8),
           Text('KickVolt', style: KvText.heading(size: 21)),
           const Spacer(),
-          // Live count comes from the entitlement service in M8.
-          Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: kv.surface1,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kv.border),
-            ),
-            alignment: Alignment.center,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${AppConstants.freeExportsPerWeek}',
-                    style: KvText.mono(
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: kv.volt,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' free left',
-                    style: KvText.ui(
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: kv.text2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          // Settings screen arrives in M8.
-          const KvIconButton(
+          KvIconButton(
             icon: KvIcons.sliders,
             tooltip: 'Settings',
-            onPressed: null,
+            onPressed: () => context.router.push(SettingsRoute()),
           ),
         ],
       ),
