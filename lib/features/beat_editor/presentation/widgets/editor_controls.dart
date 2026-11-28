@@ -96,15 +96,19 @@ class TransportBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          SizedBox(
-            width: 156,
-            child: KvSegmented<double>(
-              semanticLabel: 'Playback speed',
-              options: _speeds,
-              value: state.speed,
-              onChanged: cubit.setSpeed,
-              mono: true,
-              fontSize: 13,
+          // Shrinks below 156 on 360 dp phones, where the transport buttons
+          // leave only ~152 px (it overflowed by 4 px there).
+          Flexible(
+            child: SizedBox(
+              width: 156,
+              child: KvSegmented<double>(
+                semanticLabel: 'Playback speed',
+                options: _speeds,
+                value: state.speed,
+                onChanged: cubit.setSpeed,
+                mono: true,
+                fontSize: 13,
+              ),
             ),
           ),
           Row(

@@ -40,13 +40,20 @@ class AnalyzingView extends StatelessWidget {
     final cubit = context.read<ImportCubit>();
     return BlocConsumer<ImportCubit, ImportState>(
       listener: (context, state) {
+        // The listener runs before the builder, while PopScope still has
+        // canPop: false from the importing state, so an immediate maybePop
+        // is refused and the screen sticks at 100 %. Pop after the rebuild.
+        void popAfterRebuild([Object? result]) =>
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) context.router.maybePop(result);
+            });
         switch (state) {
           case ImportDone(:final song):
             context.router.replace(BeatEditorRoute(projectId: song.projectId));
           case ImportFailed(:final failure):
-            context.router.maybePop(failure);
+            popAfterRebuild(failure);
           case ImportCancelledState():
-            context.router.maybePop();
+            popAfterRebuild();
           case ImportImporting():
             break;
         }
