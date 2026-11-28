@@ -112,3 +112,42 @@
   instruction arrived. `.part` at 20:33: 52 896 037 bytes.
 - `git rebase origin/main` → `Successfully rebased and updated refs/heads/e2e/integration-tests.`
 - I3, I5, I8, I13 not re-run after the harness fix: waiting for Gradle 9.3.1.
+
+### 2026-11-28 — lead correction, re-runs, I10
+
+- Lead allowed the local-only toolchain override for device runs (Gradle
+  9.3.1 download keeps truncating). Re-applied before each run and
+  `git checkout -- android/settings.gradle.kts android/gradle/wrapper/gradle-wrapper.properties`
+  before each commit. Regenerated linux/macos/windows registrants were
+  line-ending noise only (`git diff` empty) → checked out, not committed.
+- ADB had dropped (`cannot connect to 192.168.100.8:5000 … (10060)`);
+  retried `adb connect` until `connected`. One install hit
+  `INSTALL_FAILED_USER_RESTRICTED` again; `adb install -r` → `Success`.
+- Run 2 (harness fix `8bf0f72`): I5, I8, I13 pass; I3 still fails, now with
+  the screen dump:
+  `Texts on screen: [, 100%, Finding your beats…, …, Cancel]`.
+  **Bug 2 (app):** failed/cancelled import stuck on Analyzing at 100 % —
+  listener `maybePop` refused by a stale `PopScope(canPop: false)`.
+  Host regression test (real AppRouter) failed without the fix
+  (`Found 1 widget with type "AnalyzingView"`), passes with it
+  (`00:02 +2: All tests passed!`). Fix `593ad38`.
+- Rebased onto `origin/main` fda51b5 (M7 merged). `SaveRecordingAudioNative`
+  forwards `encodeGuideVideo`. Added I10 (probe + audio decode + cancel
+  mid-encode). Video frames can't be decoded with the app's APIs, so flash
+  frames are not checked pixel-wise.
+- Run 3 (build `86b3b1f`), tail:
+  ```
+  E2E_RESULT | I3 | error dialog shown, projectDirs=[]
+  E2E_RESULT | I5 | beats=20 persisted exactly; shift=-882
+  E2E_RESULT | I8 | beats=19 visible=9 hidden=10 guideChannels=1
+  E2E_RESULT | I10 | hasVideo=true 720x1280 videoFrames=300/300 videoUs=10000000 songUs=10000000 diffUs=0 audio=44100/2 guide=44100/2 flashes=19 decodedAudio=443392f guideFrames=441000f audioLag=lag=2048 (2048.00) r=0.7499 bytes=864639 export=9733ms
+  E2E_RESULT | I10 cancel | cancelled mid-video; no pack folder left
+  E2E_RESULT | I13 | folder gone, empty state shown
+  03:32 +19: All tests passed!
+  ```
+  Full per-flow numbers: `docs/testing/results-2026-11-27.md`.
+- AAC priming (+2048 samples) kept as a documented known issue per lead.
+- Host checks on `86b3b1f` + docs:
+  `dart format --output=none --set-exit-if-changed lib test integration_test` → `Formatted 233 files (0 changed)`;
+  `flutter analyze` → `No issues found! (ran in 45.5s)`;
+  `flutter test -j 2 --timeout 120s` → `01:59 +476: All tests passed!`
