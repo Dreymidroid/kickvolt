@@ -110,3 +110,73 @@
 - Onboarding tile numbers are 1…6 (the video counts beats sequentially), not
   the design's 1 2 3 4 1 2.
 - Two beats in one frame: one flash, later number (as the brief).
+
+### 2026-11-27/28 — verification
+
+- Rebased onto `origin/main` (02dc655, M8 merged + settings test fix).
+  Conflicts in `settings_screen_test.dart` / `settings_cubit_test.dart`:
+  kept main's fix and comments, kept the M7 video assertions/test.
+- After the rebase: `dart run build_runner build --delete-conflicting-outputs`
+  ("Built with build_runner/aot in 25s; wrote 17 outputs"), `dart run pigeon
+  --input pigeons/audio_api.dart`, `dart format
+  lib/core/audio_native/audio_api.g.dart`, `dart format .` ("Formatted 224
+  files (0 changed)"), `flutter analyze` → "No issues found!". Generated
+  files had no content diff.
+- `flutter test -j 2` twice after the rebase: "03:24 +469: All tests passed!"
+  and "02:28 +469: All tests passed!" (0 `[E]`). Also twice before the
+  rebase: +469 both.
+- `flutter build apk --debug` with Gradle 9.3.1 failed: "Timeout of 120000
+  reached waiting for exclusive access to … gradle-9.3.1-all.zip" (another
+  process is still downloading it, ~0.8 MB/min). Per the lead, built with the
+  **local-only** override AGP 8.11.1 / Kotlin 2.2.20 / Gradle 8.14.2:
+  "√ Built build\app\outputs\flutter-apk\app-debug.apk" (300.8 s). Override
+  reverted with `git checkout --`; never committed. So the Kotlin
+  (`GuideVideoEncoder.kt`, `M4aEncoder.kt`, `AudioHostApiImpl.kt`) compiles.
+- **Not compiled:** Swift (`GuideVideoEncoder.swift`, `M4aEncoder.swift`,
+  `AudioHostApiImpl.swift`) — no macOS here; Codemagic only. **Not run:**
+  nothing encoded on a device or emulator (the phone belongs to the E2E
+  agent).
+
+### API reference pages used
+
+Android (developer.android.com/reference/…):
+`android/media/MediaCodec` (createByCodecName, configure, createInputSurface,
+signalEndOfInputStream, dequeueOutputBuffer, BufferInfo),
+`android/media/MediaCodecList#findEncoderForFormat`,
+`android/media/MediaCodecInfo.CodecCapabilities#COLOR_FormatSurface`,
+`android/media/MediaFormat` (createVideoFormat, MIMETYPE_VIDEO_AVC,
+KEY_FRAME_RATE, KEY_I_FRAME_INTERVAL, KEY_BIT_RATE, KEY_COLOR_FORMAT,
+KEY_WIDTH/HEIGHT, KEY_DURATION), `android/media/MediaMuxer`
+(MUXER_OUTPUT_MPEG_4, addTrack, writeSampleData), `android/media/MediaExtractor`
+(readSampleData, sampleTime, sampleFlags, advance), `android/opengl/EGL14`,
+`android/opengl/EGLExt#eglPresentationTimeANDROID`, `android/opengl/GLES20`,
+`android/opengl/GLUtils` (texImage2D, texSubImage2D),
+`android/graphics/Canvas`, `Paint`, `Typeface#DEFAULT_BOLD`, `Bitmap`;
+`EGL_RECORDABLE_ANDROID` (0x3142) from the EGL_ANDROID_recordable extension
+(Khronos registry), as in the AOSP/Grafika encoder samples.
+
+Apple (developer.apple.com/documentation/…):
+`avfoundation/avassetwriter` (init(outputURL:fileType:), canApply,
+startSession, endSession(atSourceTime:), finishWriting, cancelWriting),
+`avfoundation/avassetwriterinput` (requestMediaDataWhenReady,
+expectsMediaDataInRealTime, markAsFinished),
+`avfoundation/avassetwriterinputpixelbufferadaptor`,
+`avfoundation/avvideocodectype/h264`, `AVVideoAverageBitRateKey`,
+`AVVideoMaxKeyFrameIntervalKey`, `AVVideoExpectedSourceFrameRateKey`,
+`avfoundation/avassetreader`, `avassetreadertrackoutput`,
+`corevideo/cvpixelbufferpoolcreatepixelbuffer`, `CVPixelBufferLockBaseAddress`,
+`coregraphics/cgcontext`, `coretext/ctfontcreateuifontforlanguage(_:_:_:)`,
+`CTLineCreateWithAttributedString`, `CTLineGetTypographicBounds`, `CTLineDraw`,
+`coremedia/cmtime`, `CMSampleBufferGetNumSamples`,
+`foundation/filemanager/linkitem(at:to:)`.
+
+### What the E2E test should assert (on device)
+
+Export a pack with the video on a known click song; `probeMedia` the MP4:
+`hasVideo`, `videoFrameCount == ceil(frames*30/rate)`, video duration within
+one frame of the song, audio rate/channels == guide. Decode the video
+(MediaExtractor + MediaCodec / AVAssetReader): for every planned flash frame
+the mean luma is white (> 200) and the next frame is black (< 60 with a
+bright centre); frames before the first flash are black; no other frame is
+white. Decode the audio and check its first click onset sits within the AAC
+priming offset of the first beat. Cancel mid-video leaves no pack folder.
