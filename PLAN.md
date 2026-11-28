@@ -1,6 +1,6 @@
 # KickVolt — Implementation Plan
 
-Status: **approved; decisions in §8. Building M1.**
+Status: **M1–M8 and M4b built and merged; Android verified on a physical device (2026-11-28). Remaining: iOS compile/run (Codemagic), manual Part B device pass, release readiness, payments (later).**
 
 ## 1. Where the repo is today
 
@@ -275,3 +275,28 @@ Every milestone ends with: codegen if needed → `dart format .` → `flutter an
 - **UI:** Auto-detect sheet extended with Tempo row (`½×`, `Auto`, `2×`, `More…`), "Steady tempo" / "Tempo changes" segmented switch with drift suggestion, read-only "Swing feel detected" indicator, and `~` BPM prefix in varying mode. `DetectFailedSheet` offers "Try Tempo changes" when local tempo is viable. Varying mode disables Snap with tooltip "Snap needs a steady tempo" and hides `SnapRange`. One undo restores previous beats, BPM, phase, sections, tempo mode, and override.
 - **Verified:** `dart format` (193 files, 0 changed), `flutter analyze` (0 issues), and two consecutive full `flutter test -j 2` runs (+361 all passed, including `no_regression_test`, `tempo_choice_test`, `varying_tempo_test`, `swing_test`, `retrack_test`, and `auto_detect_sheet_test`).
 - **Known limits:** Only synthetic audio tested; no real recordings or on-device runs yet.
+
+### M8 — Onboarding, how-to, settings: done (2026-11-27)
+- No paywall or payments (decided 2026-11-26); `EntitlementService` stub unchanged, no "Pro"/"free left" text anywhere (guard test).
+- First-run onboarding (3 pages) behind an auto_route guard that decides before the first frame; coach marks (3 steps) on the first editor open; How-to route with CapCut/VN tabs (VN copy corrected to "Beats › Auto Beats", no open-app buttons); Home "free left" chip removed, How-to and Settings wired.
+- `SettingsScreen` + `SettingsCubit`: click sound, audio format, mono guide, preview mix, detection sensitivity (Low/Balanced/High → 0.25/0.5/0.75 for new projects), haptics, lag fix, help, feedback/privacy via `url_launcher` (placeholders in `AppConstants`), About version checked against `pubspec.yaml` by a test. Pigeon `requestAudioPermission` (Android `READ_MEDIA_AUDIO`/`READ_EXTERNAL_STORAGE`, iOS media library).
+- **Fixed during verification:** the work was left mid-edit (syntax error, missing imports); `settings_screen_test` hung until its 10-min timeout because the injected cubit was closed a second time in `addTearDown` outside fake time; ambiguous Semantics finder; added the missing settings and onboarding cubit tests.
+- **Verified:** analyze clean, `flutter test -j 2` +403 all passed. On the device: I11 (first run, coach marks once) passes.
+- **Placeholders to fill before release:** `AppConstants.feedbackEmail`, `AppConstants.privacyUrl`.
+
+### M7 — Guide video: done (2026-11-28)
+- Built by an agent from `docs/handoff/M7-guide-video.md` (user's "complete the app" taken as the go-ahead), reviewed and merged.
+- Pure-Dart frame plan (`guide_video_plan.dart`): `totalFrames = ceil(frames·30/rate)`, flash frame `floor(sample·30/rate)`, integer maths only; property test over 400 random songs finds no flash outside its beat's frame. `<Title>_guide.mp4` planned after the guide track; probe-verified after encoding (video track, frame count, duration within one frame, audio format).
+- Android `GuideVideoEncoder.kt`: Surface + EGL14/GLES20, frame timestamps from the frame index (`eglPresentationTimeANDROID`), H.264 with 720×1280 fallback, guide audio as AAC via `MediaMuxer`. iOS `GuideVideoEncoder.swift`: `AVAssetWriter` + pixel buffer adaptor, CoreGraphics/CoreText.
+- Turned on M8's video bits: Onboarding2 Video tile, Settings "Video format · MP4" and "Guide video in packs".
+- **Verified:** `flutter test -j 2` +469 all passed on merged `main`. On the device (I10): 300/300 frames, duration diff 0 µs, audio = guide format, 9.7 s to export a 10 s pack; cancel mid-video leaves nothing. The Xiaomi's H.264 encoder refused 1080×1920 and fell back to 720×1280.
+- **Not verified:** Swift not compiled (no macOS); flash frames not checked pixel by pixel (the app has no video-frame decoder).
+
+### E2E integration tests + first device run: done (2026-11-28)
+- Built by an agent from `docs/handoff/E2E-testing.md` Part A: `lib/app/bootstrap.dart` seam, `integration_test/` with fixtures synthesised in Dart at test time, condition-based waits only, flows I1–I13; `e2e-ios` Codemagic workflow (manual, never run).
+- **Device:** Xiaomi 23106RN0DA, Android 14, debug build: **19/19 flows pass** (`docs/testing/results-2026-11-27.md`). First time any native code ran: decode, AAC encode, H.264 encode, probe, cancel, copy all worked, no Kotlin exceptions.
+- **App bugs found on the device and fixed:** editor transport row overflowed 4 px on 360 dp phones (`27d2fa2`); a failed/cancelled import stuck on Analyzing at 100 % because `maybePop` ran before `PopScope` rebuilt (`593ad38`). Both with host regression tests.
+- **Measured:** WAV decode 0.5–0.6 s and detection 0.5–0.6 s for a 10 s fixture; M4A pack export 10–11 s; M4A song/guide sync difference **0 samples**.
+- **Known issue:** Android AAC decode keeps the 2048-frame encoder priming (46.4 ms @ 44.1 kHz) and some end padding; `WavDecoder` ignores encoder delay/padding. Packs stay in sync because `song.wav` is the master clock; it only shifts imported M4A/AAC relative to the original file.
+- **Toolchain caveat:** the Gradle 9.3.1 download is too slow here and keeps truncating, so every local build and device run used a **local-only** override (Gradle 8.14.2 / AGP 8.11.1 / Kotlin 2.2.20, never committed). The committed AGP 9.1.0 / Gradle 9.3.1 build is still unbuilt locally; Codemagic builds it.
+- **Blocked / not covered:** MP3 and MP4-video import (no encoder on this machine to make fixtures), I12 2× path (detection found 174 directly), iOS, Part B manual cases (real songs, CapCut/VN by hand, Bluetooth, backgrounding).
