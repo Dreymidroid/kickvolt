@@ -296,7 +296,9 @@ struct LibraryTrack: Hashable, CustomStringConvertible {
   }
 }
 
-/// Duration and format of an audio file as the platform sees it.
+/// Duration and format of a media file as the platform sees it. The audio
+/// fields describe the first audio track; the `video*` fields are set only for
+/// files with a video track (the M7 guide video).
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct MediaInfo: Hashable, CustomStringConvertible {
@@ -304,6 +306,12 @@ struct MediaInfo: Hashable, CustomStringConvertible {
   var channels: Int64
   var durationUs: Int64
   var frameCount: Int64? = nil
+  var hasVideo: Bool? = nil
+  var videoWidth: Int64? = nil
+  var videoHeight: Int64? = nil
+  /// Number of video samples (frames) in the track, counted by reading it.
+  var videoFrameCount: Int64? = nil
+  var videoDurationUs: Int64? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -312,12 +320,22 @@ struct MediaInfo: Hashable, CustomStringConvertible {
     let channels = pigeonVar_list[1] as! Int64
     let durationUs = pigeonVar_list[2] as! Int64
     let frameCount: Int64? = nilOrValue(pigeonVar_list[3])
+    let hasVideo: Bool? = nilOrValue(pigeonVar_list[4])
+    let videoWidth: Int64? = nilOrValue(pigeonVar_list[5])
+    let videoHeight: Int64? = nilOrValue(pigeonVar_list[6])
+    let videoFrameCount: Int64? = nilOrValue(pigeonVar_list[7])
+    let videoDurationUs: Int64? = nilOrValue(pigeonVar_list[8])
 
     return MediaInfo(
       sampleRate: sampleRate,
       channels: channels,
       durationUs: durationUs,
-      frameCount: frameCount
+      frameCount: frameCount,
+      hasVideo: hasVideo,
+      videoWidth: videoWidth,
+      videoHeight: videoHeight,
+      videoFrameCount: videoFrameCount,
+      videoDurationUs: videoDurationUs
     )
   }
   func toList() -> [Any?] {
@@ -326,13 +344,18 @@ struct MediaInfo: Hashable, CustomStringConvertible {
       channels,
       durationUs,
       frameCount,
+      hasVideo,
+      videoWidth,
+      videoHeight,
+      videoFrameCount,
+      videoDurationUs,
     ]
   }
   static func == (lhs: MediaInfo, rhs: MediaInfo) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return AudioApiPigeonInternal.deepEquals(lhs.sampleRate, rhs.sampleRate) && AudioApiPigeonInternal.deepEquals(lhs.channels, rhs.channels) && AudioApiPigeonInternal.deepEquals(lhs.durationUs, rhs.durationUs) && AudioApiPigeonInternal.deepEquals(lhs.frameCount, rhs.frameCount)
+    return AudioApiPigeonInternal.deepEquals(lhs.sampleRate, rhs.sampleRate) && AudioApiPigeonInternal.deepEquals(lhs.channels, rhs.channels) && AudioApiPigeonInternal.deepEquals(lhs.durationUs, rhs.durationUs) && AudioApiPigeonInternal.deepEquals(lhs.frameCount, rhs.frameCount) && AudioApiPigeonInternal.deepEquals(lhs.hasVideo, rhs.hasVideo) && AudioApiPigeonInternal.deepEquals(lhs.videoWidth, rhs.videoWidth) && AudioApiPigeonInternal.deepEquals(lhs.videoHeight, rhs.videoHeight) && AudioApiPigeonInternal.deepEquals(lhs.videoFrameCount, rhs.videoFrameCount) && AudioApiPigeonInternal.deepEquals(lhs.videoDurationUs, rhs.videoDurationUs)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -341,10 +364,100 @@ struct MediaInfo: Hashable, CustomStringConvertible {
     AudioApiPigeonInternal.deepHash(value: channels, hasher: &hasher)
     AudioApiPigeonInternal.deepHash(value: durationUs, hasher: &hasher)
     AudioApiPigeonInternal.deepHash(value: frameCount, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: hasVideo, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: videoWidth, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: videoHeight, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: videoFrameCount, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: videoDurationUs, hasher: &hasher)
   }
 
   public var description: String {
-    return "MediaInfo(sampleRate: \(String(describing: sampleRate)), channels: \(String(describing: channels)), durationUs: \(String(describing: durationUs)), frameCount: \(String(describing: frameCount)))"
+    return "MediaInfo(sampleRate: \(String(describing: sampleRate)), channels: \(String(describing: channels)), durationUs: \(String(describing: durationUs)), frameCount: \(String(describing: frameCount)), hasVideo: \(String(describing: hasVideo)), videoWidth: \(String(describing: videoWidth)), videoHeight: \(String(describing: videoHeight)), videoFrameCount: \(String(describing: videoFrameCount)), videoDurationUs: \(String(describing: videoDurationUs)))"
+  }
+}
+
+/// What the native guide-video encoder renders (M7 §5). Timing is decided in
+/// Dart: frame `k` is presented at exactly `k / fps`; [flashFrames] (ascending)
+/// and [beatNumbers] (parallel, 1-based) fully determine every frame's look.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct GuideVideoSpec: Hashable, CustomStringConvertible {
+  var fps: Int64
+  var width: Int64
+  var height: Int64
+  var totalFrames: Int64
+  var flashFrames: [Int64]
+  var beatNumbers: [Int64]
+  /// The pack's guide track (16-bit PCM WAV), muxed as AAC.
+  var audioWavPath: String
+  var outPath: String
+  var videoBitrate: Int64
+  var audioBitrate: Int64
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> GuideVideoSpec? {
+    let fps = pigeonVar_list[0] as! Int64
+    let width = pigeonVar_list[1] as! Int64
+    let height = pigeonVar_list[2] as! Int64
+    let totalFrames = pigeonVar_list[3] as! Int64
+    let flashFrames = pigeonVar_list[4] as! [Int64]
+    let beatNumbers = pigeonVar_list[5] as! [Int64]
+    let audioWavPath = pigeonVar_list[6] as! String
+    let outPath = pigeonVar_list[7] as! String
+    let videoBitrate = pigeonVar_list[8] as! Int64
+    let audioBitrate = pigeonVar_list[9] as! Int64
+
+    return GuideVideoSpec(
+      fps: fps,
+      width: width,
+      height: height,
+      totalFrames: totalFrames,
+      flashFrames: flashFrames,
+      beatNumbers: beatNumbers,
+      audioWavPath: audioWavPath,
+      outPath: outPath,
+      videoBitrate: videoBitrate,
+      audioBitrate: audioBitrate
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      fps,
+      width,
+      height,
+      totalFrames,
+      flashFrames,
+      beatNumbers,
+      audioWavPath,
+      outPath,
+      videoBitrate,
+      audioBitrate,
+    ]
+  }
+  static func == (lhs: GuideVideoSpec, rhs: GuideVideoSpec) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return AudioApiPigeonInternal.deepEquals(lhs.fps, rhs.fps) && AudioApiPigeonInternal.deepEquals(lhs.width, rhs.width) && AudioApiPigeonInternal.deepEquals(lhs.height, rhs.height) && AudioApiPigeonInternal.deepEquals(lhs.totalFrames, rhs.totalFrames) && AudioApiPigeonInternal.deepEquals(lhs.flashFrames, rhs.flashFrames) && AudioApiPigeonInternal.deepEquals(lhs.beatNumbers, rhs.beatNumbers) && AudioApiPigeonInternal.deepEquals(lhs.audioWavPath, rhs.audioWavPath) && AudioApiPigeonInternal.deepEquals(lhs.outPath, rhs.outPath) && AudioApiPigeonInternal.deepEquals(lhs.videoBitrate, rhs.videoBitrate) && AudioApiPigeonInternal.deepEquals(lhs.audioBitrate, rhs.audioBitrate)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("GuideVideoSpec")
+    AudioApiPigeonInternal.deepHash(value: fps, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: width, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: height, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: totalFrames, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: flashFrames, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: beatNumbers, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: audioWavPath, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: outPath, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: videoBitrate, hasher: &hasher)
+    AudioApiPigeonInternal.deepHash(value: audioBitrate, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "GuideVideoSpec(fps: \(String(describing: fps)), width: \(String(describing: width)), height: \(String(describing: height)), totalFrames: \(String(describing: totalFrames)), flashFrames: \(String(describing: flashFrames)), beatNumbers: \(String(describing: beatNumbers)), audioWavPath: \(String(describing: audioWavPath)), outPath: \(String(describing: outPath)), videoBitrate: \(String(describing: videoBitrate)), audioBitrate: \(String(describing: audioBitrate)))"
   }
 }
 
@@ -357,6 +470,8 @@ private class AudioApiPigeonCodecReader: FlutterStandardReader {
       return LibraryTrack.fromList(self.readValue() as! [Any?])
     case 131:
       return MediaInfo.fromList(self.readValue() as! [Any?])
+    case 132:
+      return GuideVideoSpec.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -373,6 +488,9 @@ private class AudioApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.toList())
     } else if let value = value as? MediaInfo {
       super.writeByte(131)
+      super.writeValue(value.toList())
+    } else if let value = value as? GuideVideoSpec {
+      super.writeByte(132)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -440,6 +558,13 @@ protocol AudioHostApi {
   /// is backgrounded. Android: no-op.
   func beginBackgroundWork(name: String) throws -> Int64
   func endBackgroundWork(token: Int64) throws
+  /// Encodes the guide video (M7): H.264 at [GuideVideoSpec.fps] constant
+  /// frame rate with the guide WAV as AAC audio, in an MPEG-4 container. Falls
+  /// back to 720 × 1280 if the encoder refuses the requested size (the result
+  /// says which size was written). Progress through AudioProgressApi (fraction
+  /// of totalFrames written). Fails with `disk_full`, `encode_failed`,
+  /// `cancelled`.
+  func encodeGuideVideo(jobId: String, spec: GuideVideoSpec) async throws -> MediaInfo
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -668,6 +793,30 @@ class AudioHostApiSetup {
       }
     } else {
       endBackgroundWorkChannel.setMessageHandler(nil)
+    }
+    /// Encodes the guide video (M7): H.264 at [GuideVideoSpec.fps] constant
+    /// frame rate with the guide WAV as AAC audio, in an MPEG-4 container. Falls
+    /// back to 720 × 1280 if the encoder refuses the requested size (the result
+    /// says which size was written). Progress through AudioProgressApi (fraction
+    /// of totalFrames written). Fails with `disk_full`, `encode_failed`,
+    /// `cancelled`.
+    let encodeGuideVideoChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.kickvolt.AudioHostApi.encodeGuideVideo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      encodeGuideVideoChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let jobIdArg = args[0] as! String
+        let specArg = args[1] as! GuideVideoSpec
+        Task { @MainActor in
+          do {
+            let result = try await api.encodeGuideVideo(jobId: jobIdArg, spec: specArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      encodeGuideVideoChannel.setMessageHandler(nil)
     }
   }
 }

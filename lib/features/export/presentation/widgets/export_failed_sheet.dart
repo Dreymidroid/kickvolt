@@ -26,7 +26,10 @@ class ExportFailedSheet extends StatelessWidget {
         kind != ExportFailureKind.sourceMissing &&
         kind != ExportFailureKind.encodeFailed;
     final switchIsPrimary = kind == ExportFailureKind.encodeFailed;
+    // M7 §6: the guide video failed -> "Export without video" (primary).
+    final videoFailed = failure.isVideoFailure;
     final switchLabel = switch (kind) {
+      _ when videoFailed => null,
       ExportFailureKind.diskFull when options.format == AudioFormat.wav =>
         'Switch to M4A and retry',
       ExportFailureKind.encodeFailed => 'Switch to WAV and retry',
@@ -107,6 +110,11 @@ class ExportFailedSheet extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 18),
+                  if (videoFailed)
+                    KvPrimaryButton(
+                      label: 'Export without video',
+                      onPressed: cubit.retryWithoutVideo,
+                    ),
                   if (canRetry)
                     KvPrimaryButton(label: 'Try again', onPressed: cubit.retry),
                   if (switchLabel != null && switchIsPrimary)

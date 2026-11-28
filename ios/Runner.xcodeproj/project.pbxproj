@@ -21,6 +21,7 @@
 		4B1D0A000000000000000202 /* AudioHostApiImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0A000000000000000102 /* AudioHostApiImpl.swift */; };
 		4B1D0A000000000000000203 /* M4aEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0A000000000000000103 /* M4aEncoder.swift */; };
 		4B1D0A000000000000000204 /* FileSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0A000000000000000104 /* FileSaver.swift */; };
+		4B1D0A000000000000000205 /* GuideVideoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0A000000000000000105 /* GuideVideoEncoder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 		4B1D0A000000000000000102 /* AudioHostApiImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioHostApiImpl.swift; sourceTree = "<group>"; };
 		4B1D0A000000000000000103 /* M4aEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = M4aEncoder.swift; sourceTree = "<group>"; };
 		4B1D0A000000000000000104 /* FileSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSaver.swift; sourceTree = "<group>"; };
+		4B1D0A000000000000000105 /* GuideVideoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideVideoEncoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +149,7 @@
 				4B1D0A000000000000000102 /* AudioHostApiImpl.swift */,
 				4B1D0A000000000000000103 /* M4aEncoder.swift */,
 				4B1D0A000000000000000104 /* FileSaver.swift */,
+				4B1D0A000000000000000105 /* GuideVideoEncoder.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -310,6 +313,7 @@
 				4B1D0A000000000000000202 /* AudioHostApiImpl.swift in Sources */,
 				4B1D0A000000000000000203 /* M4aEncoder.swift in Sources */,
 				4B1D0A000000000000000204 /* FileSaver.swift in Sources */,
+				4B1D0A000000000000000205 /* GuideVideoEncoder.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 			);

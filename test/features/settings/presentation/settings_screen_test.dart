@@ -66,7 +66,7 @@ void main() {
     return cubit;
   }
 
-  testWidgets('rows: no Theme row, no Pro banner, no video rows', (
+  testWidgets('rows: no Theme row, no Pro banner, M7 video rows', (
     tester,
   ) async {
     await pump(tester);
@@ -81,8 +81,11 @@ void main() {
     expect(find.text('KickVolt v${AppConstants.appVersion}'), findsOneWidget);
     expect(find.text('Theme'), findsNothing);
     expect(find.textContaining('Pro'), findsNothing);
-    expect(find.text('Video format'), findsNothing);
-    expect(find.text('Guide video in packs'), findsNothing);
+    // M7 rows: read-only video format and the "Guide video in packs" toggle.
+    expect(find.text('Video format'), findsOneWidget);
+    expect(find.text('MP4'), findsOneWidget);
+    expect(find.text('Guide video in packs'), findsOneWidget);
+    expect(find.text('PRO'), findsNothing);
   });
 
   testWidgets('pickers and toggles persist immediately', (tester) async {
@@ -117,6 +120,16 @@ void main() {
     await tester.tap(toggle('Preview mix in packs'));
     await tester.pump();
     expect(repo.current.includePreviewByDefault, isTrue);
+
+    await tester.ensureVisible(toggle('Guide video in packs'));
+    await tester.tap(toggle('Guide video in packs'));
+    await tester.pump();
+    expect(repo.current.includeVideoByDefault, isTrue);
+
+    // Video format is read-only: tapping it changes nothing and opens nothing.
+    await tester.tap(find.text('Video format'));
+    await tester.pumpAndSettle();
+    expect(find.text('MP4'), findsOneWidget);
   });
 
   testWidgets('feedback and privacy open the configured links', (tester) async {

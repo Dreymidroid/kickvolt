@@ -316,11 +316,43 @@ class M4aEncoder(
                 } else {
                     null
                 }
+                // M7: a video track (the guide video). Frames are counted by
+                // stepping through the track's samples (no decoding).
+                val videoTrack = (0 until extractor.trackCount).firstOrNull {
+                    extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)
+                        ?.startsWith("video/") == true
+                }
+                if (videoTrack != null) {
+                    val vf = extractor.getTrackFormat(videoTrack)
+                    val videoDurationUs = if (vf.containsKey(MediaFormat.KEY_DURATION)) {
+                        vf.getLong(MediaFormat.KEY_DURATION)
+                    } else {
+                        null
+                    }
+                    extractor.selectTrack(videoTrack)
+                    var videoFrames = 0L
+                    while (extractor.sampleTime >= 0) {
+                        videoFrames++
+                        if (!extractor.advance()) break
+                    }
+                    return MediaInfo(
+                        sampleRate = sampleRate,
+                        channels = channels,
+                        durationUs = durationUs,
+                        frameCount = frameCount,
+                        hasVideo = true,
+                        videoWidth = vf.getInteger(MediaFormat.KEY_WIDTH).toLong(),
+                        videoHeight = vf.getInteger(MediaFormat.KEY_HEIGHT).toLong(),
+                        videoFrameCount = videoFrames,
+                        videoDurationUs = videoDurationUs,
+                    )
+                }
                 return MediaInfo(
                     sampleRate = sampleRate,
                     channels = channels,
                     durationUs = durationUs,
                     frameCount = frameCount,
+                    hasVideo = false,
                 )
             } catch (e: FlutterError) {
                 throw e

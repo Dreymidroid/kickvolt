@@ -1,3 +1,4 @@
+import '../guide_video_plan.dart';
 import 'export_options.dart';
 
 /// One planned file in a [BeatPackPlan].
@@ -33,6 +34,7 @@ class BeatPackPlan {
     required this.visibleBeatSamples,
     required this.files,
     required this.estimatedDiskBytes,
+    this.guideVideo,
   });
 
   final String projectId;
@@ -45,6 +47,9 @@ class BeatPackPlan {
   final List<int> visibleBeatSamples;
   final List<PlannedExportFile> files;
   final int estimatedDiskBytes;
+
+  /// Frame plan of the guide video, when the pack includes one (M7).
+  final GuideVideoPlan? guideVideo;
 
   int get clickCount => visibleBeatSamples.length;
   int get fileCount => files.length;
@@ -59,6 +64,9 @@ class ExportedFile {
     required this.frameCount,
     required this.byteSize,
     this.clickCount,
+    this.flashCount,
+    this.videoWidth,
+    this.videoHeight,
   });
 
   final String path;
@@ -67,6 +75,12 @@ class ExportedFile {
   final int frameCount;
   final int byteSize;
   final int? clickCount;
+
+  /// Guide video only: number of white flash frames and the encoded size
+  /// (720 × 1280 when the encoder refused 1080 × 1920).
+  final int? flashCount;
+  final int? videoWidth;
+  final int? videoHeight;
 }
 
 /// Completed beat pack returned by [ExportRepository.export] (§4.1).

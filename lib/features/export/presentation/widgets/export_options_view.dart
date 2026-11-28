@@ -17,6 +17,8 @@ const String kM4aWarning =
     'M4A is smaller, but some editors shift it by a few milliseconds. Use '
     'WAV for exact sync.';
 
+String _flashes(int n) => '$n ${n == 1 ? 'flash' : 'flashes'}';
+
 String _clickStyleLabel(ClickStyle s) => switch (s) {
   ClickStyle.snap => 'Snap',
   ClickStyle.rim => 'Rim',
@@ -32,12 +34,20 @@ class ExportOptionsView extends StatelessWidget {
     required this.options,
     required this.plan,
     required this.quota,
+    this.videoAllowed = true,
+    this.onVideoLocked,
   });
 
   final Project project;
   final ExportOptions options;
   final BeatPackPlan plan;
   final ExportQuota quota;
+
+  /// `Entitlements.hasGuideVideo` (M7 §6).
+  final bool videoAllowed;
+
+  /// Called when the locked Guide video row is tapped (does nothing today).
+  final VoidCallback? onVideoLocked;
 
   static String _bpm(double? bpm) => bpm == null
       ? '– BPM'
@@ -135,16 +145,27 @@ class ExportOptionsView extends StatelessWidget {
                           label: 'Include guide track',
                         ),
                       ),
-                      _PackRow(
-                        icon: KvIcons.video,
-                        title: 'Guide video',
-                        subtitle: 'Black clip that flashes each beat number',
-                        trailing: Text(
-                          'Coming soon',
-                          style: KvText.ui(
-                            size: 12,
-                            weight: FontWeight.w600,
-                            color: kv.text3,
+                      // M7 §6: a toggle with `hasGuideVideo`; otherwise a
+                      // disabled row whose tap calls [onVideoLocked]. No PRO
+                      // badge, no paywall.
+                      GestureDetector(
+                        key: const ValueKey('export-video-row'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: videoAllowed ? null : onVideoLocked,
+                        child: Opacity(
+                          opacity: videoAllowed ? 1 : 0.45,
+                          child: _PackRow(
+                            icon: KvIcons.video,
+                            title: 'Guide video',
+                            subtitle:
+                                'Black clip that flashes each beat number',
+                            trailing: _Switch(
+                              value: videoAllowed && options.includeVideo,
+                              label: 'Include guide video',
+                              onChanged: videoAllowed
+                                  ? cubit.setIncludeVideo
+                                  : null,
+                            ),
                           ),
                         ),
                       ),
@@ -232,7 +253,10 @@ class ExportOptionsView extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                f.clickCount == null
+                                f.kind == ExportFileKind.video
+                                    ? '${formatDuration(plan.durationMs)} · '
+                                          '${_flashes(plan.guideVideo?.flashCount ?? 0)}'
+                                    : f.clickCount == null
                                     ? formatDuration(plan.durationMs)
                                     : '${formatDuration(plan.durationMs)} · '
                                           '${f.clickCount} '

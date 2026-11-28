@@ -52,6 +52,7 @@ class ExportCubit extends Cubit<ExportState> {
   Project? _project;
   ExportOptions _options = const ExportOptions();
   ExportQuota _quota = const ExportQuota.unlimited();
+  bool _videoAllowed = true;
   ExportCancelToken? _token;
   bool _starting = false;
 
@@ -61,13 +62,16 @@ class ExportCubit extends Cubit<ExportState> {
       final project = await _projects.getProject(projectId);
       final settings = await _settings.load();
       final quota = await _entitlements.exportQuota();
+      final entitlements = await _entitlements.current();
       if (isClosed) return;
       _project = project;
       _quota = quota;
+      _videoAllowed = entitlements.hasGuideVideo;
       _options = ExportOptions(
         clickStyle: settings.defaultClickStyle,
         format: settings.defaultAudioFormat,
         includePreview: settings.includePreviewByDefault,
+        includeVideo: _videoAllowed && settings.includeVideoByDefault,
         monoGuide: settings.monoGuideTrack,
       );
       _emitEditing();
@@ -85,6 +89,7 @@ class ExportCubit extends Cubit<ExportState> {
         options: _options,
         plan: planBeatPack(project, _options),
         quota: _quota,
+        videoAllowed: _videoAllowed,
       ),
     );
   }
@@ -103,6 +108,16 @@ class ExportCubit extends Cubit<ExportState> {
 
   void setIncludePreview(bool value) =>
       _update(_options.copyWith(includePreview: value));
+
+  /// Guide video toggle; ignored unless `hasGuideVideo` (M7 §6).
+  void setIncludeVideo(bool value) {
+    if (!_videoAllowed) return;
+    _update(_options.copyWith(includeVideo: value));
+  }
+
+  /// The locked Guide video row was tapped. Does nothing until payments
+  /// exist (no paywall, M7 §6); the one place a future paywall plugs in.
+  void onVideoLocked() {}
 
   /// Starts exporting with the current options. Never starts when the
   /// entitlement service refuses, or when there are no visible beats.
@@ -189,6 +204,7 @@ class ExportCubit extends Cubit<ExportState> {
         options: _options,
         plan: planBeatPack(project, _options),
         quota: _quota,
+        videoAllowed: _videoAllowed,
       ),
     );
   }
@@ -212,6 +228,12 @@ class ExportCubit extends Cubit<ExportState> {
           ? AudioFormat.m4a
           : AudioFormat.wav,
     );
+    return startExport();
+  }
+
+  /// "Export without video" after the guide video failed (M7 §6).
+  Future<void> retryWithoutVideo() {
+    _options = _options.copyWith(includeVideo: false);
     return startExport();
   }
 

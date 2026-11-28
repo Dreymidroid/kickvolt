@@ -20,6 +20,10 @@ sealed class ExportState with _$ExportState {
     required ExportOptions options,
     required BeatPackPlan plan,
     required ExportQuota quota,
+
+    /// `Entitlements.hasGuideVideo`: the Guide video row is a toggle when
+    /// true, a locked row otherwise (M7 §6).
+    @Default(true) bool videoAllowed,
   }) = ExportEditing;
 
   const factory ExportState.exporting({
@@ -35,6 +39,7 @@ sealed class ExportState with _$ExportState {
     required ExportOptions options,
     required BeatPackPlan plan,
     required ExportQuota quota,
+    @Default(true) bool videoAllowed,
   }) = ExportFailed;
 
   const factory ExportState.done({

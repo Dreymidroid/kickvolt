@@ -108,6 +108,18 @@ class AudioHostApiImpl(
         }
     }
 
+    override suspend fun encodeGuideVideo(jobId: String, spec: GuideVideoSpec): MediaInfo {
+        val flag = AtomicBoolean(false)
+        jobs[jobId] = flag
+        try {
+            return withContext(Dispatchers.IO) {
+                GuideVideoEncoder(flag) { p -> reportProgress(jobId, p) }.encode(spec)
+            }
+        } finally {
+            jobs.remove(jobId)
+        }
+    }
+
     override suspend fun probeMedia(path: String): MediaInfo =
         withContext(Dispatchers.IO) { M4aEncoder.probeMedia(path) }
 

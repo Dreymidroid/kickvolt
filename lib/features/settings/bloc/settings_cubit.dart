@@ -76,6 +76,9 @@ class SettingsCubit extends Cubit<SettingsState> {
   Future<void> setIncludePreviewByDefault(bool enabled) =>
       _saveMutated((s) => s.copyWith(includePreviewByDefault: enabled));
 
+  Future<void> setIncludeVideoByDefault(bool enabled) =>
+      _saveMutated((s) => s.copyWith(includeVideoByDefault: enabled));
+
   Future<void> setSensitivityPreset(SensitivityPreset preset) =>
       _saveMutated((s) => s.withSensitivityPreset(preset));
 

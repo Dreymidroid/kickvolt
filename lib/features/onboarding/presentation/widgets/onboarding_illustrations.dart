@@ -320,8 +320,7 @@ class _KickVoltMarkedWavePainter extends CustomPainter {
 }
 
 /// Onboarding screen 2 (`Onboarding2.html` / `Onboarding2.png`) beat-pack card.
-/// Shows Song and Guide only (M7 guide video is not on `main`; no PRO badge,
-/// M8 §4.2).
+/// Shows Song, Guide and Video (M7 guide video; no PRO badge, M8 §4.2).
 class BeatPackIllustrationCard extends StatelessWidget {
   const BeatPackIllustrationCard({super.key});
 
@@ -397,7 +396,67 @@ class BeatPackIllustrationCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
+                width: 48,
+                child: Text(
+                  'Video',
+                  style: KvText.ui(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: kv.text2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    // The guide video counts beats 1, 2, 3, …; beat 3 is on
+                    // its white flash frame.
+                    for (var n = 1; n <= 6; n++) ...[
+                      if (n > 1) const SizedBox(width: 4),
+                      Expanded(
+                        child: _VideoTile(number: n, flash: n == 3),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _VideoTile extends StatelessWidget {
+  const _VideoTile({required this.number, required this.flash});
+
+  final int number;
+  final bool flash;
+
+  @override
+  Widget build(BuildContext context) {
+    final kv = context.kv;
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: flash ? kv.text1 : const Color(0xFF000000),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: kv.border),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$number',
+        style: KvText.mono(
+          size: 14,
+          weight: FontWeight.w700,
+          color: flash ? kv.background : kv.text2,
+        ),
       ),
     );
   }

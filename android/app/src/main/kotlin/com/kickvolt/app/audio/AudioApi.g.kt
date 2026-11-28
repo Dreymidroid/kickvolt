@@ -314,7 +314,9 @@ data class LibraryTrack (
 }
 
 /**
- * Duration and format of an audio file as the platform sees it.
+ * Duration and format of a media file as the platform sees it. The audio
+ * fields describe the first audio track; the `video*` fields are set only for
+ * files with a video track (the M7 guide video).
  *
  * Generated class from Pigeon that represents data sent in messages.
  */
@@ -322,7 +324,13 @@ data class MediaInfo (
   val sampleRate: Long,
   val channels: Long,
   val durationUs: Long,
-  val frameCount: Long? = null
+  val frameCount: Long? = null,
+  val hasVideo: Boolean? = null,
+  val videoWidth: Long? = null,
+  val videoHeight: Long? = null,
+  /** Number of video samples (frames) in the track, counted by reading it. */
+  val videoFrameCount: Long? = null,
+  val videoDurationUs: Long? = null
 )
  {
   companion object {
@@ -331,7 +339,12 @@ data class MediaInfo (
       val channels = pigeonVar_list[1] as Long
       val durationUs = pigeonVar_list[2] as Long
       val frameCount = pigeonVar_list[3] as Long?
-      return MediaInfo(sampleRate, channels, durationUs, frameCount)
+      val hasVideo = pigeonVar_list[4] as Boolean?
+      val videoWidth = pigeonVar_list[5] as Long?
+      val videoHeight = pigeonVar_list[6] as Long?
+      val videoFrameCount = pigeonVar_list[7] as Long?
+      val videoDurationUs = pigeonVar_list[8] as Long?
+      return MediaInfo(sampleRate, channels, durationUs, frameCount, hasVideo, videoWidth, videoHeight, videoFrameCount, videoDurationUs)
     }
   }
   fun toList(): List<Any?> {
@@ -340,6 +353,11 @@ data class MediaInfo (
       channels,
       durationUs,
       frameCount,
+      hasVideo,
+      videoWidth,
+      videoHeight,
+      videoFrameCount,
+      videoDurationUs,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -350,7 +368,7 @@ data class MediaInfo (
       return true
     }
     val other = other as MediaInfo
-    return AudioApiPigeonUtils.deepEquals(this.sampleRate, other.sampleRate) && AudioApiPigeonUtils.deepEquals(this.channels, other.channels) && AudioApiPigeonUtils.deepEquals(this.durationUs, other.durationUs) && AudioApiPigeonUtils.deepEquals(this.frameCount, other.frameCount)
+    return AudioApiPigeonUtils.deepEquals(this.sampleRate, other.sampleRate) && AudioApiPigeonUtils.deepEquals(this.channels, other.channels) && AudioApiPigeonUtils.deepEquals(this.durationUs, other.durationUs) && AudioApiPigeonUtils.deepEquals(this.frameCount, other.frameCount) && AudioApiPigeonUtils.deepEquals(this.hasVideo, other.hasVideo) && AudioApiPigeonUtils.deepEquals(this.videoWidth, other.videoWidth) && AudioApiPigeonUtils.deepEquals(this.videoHeight, other.videoHeight) && AudioApiPigeonUtils.deepEquals(this.videoFrameCount, other.videoFrameCount) && AudioApiPigeonUtils.deepEquals(this.videoDurationUs, other.videoDurationUs)
   }
 
   override fun hashCode(): Int {
@@ -359,10 +377,95 @@ data class MediaInfo (
     result = 31 * result + AudioApiPigeonUtils.deepHash(this.channels)
     result = 31 * result + AudioApiPigeonUtils.deepHash(this.durationUs)
     result = 31 * result + AudioApiPigeonUtils.deepHash(this.frameCount)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.hasVideo)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.videoWidth)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.videoHeight)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.videoFrameCount)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.videoDurationUs)
     return result
   }
   override fun toString(): String {
-    return "MediaInfo(sampleRate=$sampleRate, channels=$channels, durationUs=$durationUs, frameCount=$frameCount)"
+    return "MediaInfo(sampleRate=$sampleRate, channels=$channels, durationUs=$durationUs, frameCount=$frameCount, hasVideo=$hasVideo, videoWidth=$videoWidth, videoHeight=$videoHeight, videoFrameCount=$videoFrameCount, videoDurationUs=$videoDurationUs)"
+  }
+}
+
+/**
+ * What the native guide-video encoder renders (M7 §5). Timing is decided in
+ * Dart: frame `k` is presented at exactly `k / fps`; [flashFrames] (ascending)
+ * and [beatNumbers] (parallel, 1-based) fully determine every frame's look.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class GuideVideoSpec (
+  val fps: Long,
+  val width: Long,
+  val height: Long,
+  val totalFrames: Long,
+  val flashFrames: List<Long>,
+  val beatNumbers: List<Long>,
+  /** The pack's guide track (16-bit PCM WAV), muxed as AAC. */
+  val audioWavPath: String,
+  val outPath: String,
+  val videoBitrate: Long,
+  val audioBitrate: Long
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): GuideVideoSpec {
+      val fps = pigeonVar_list[0] as Long
+      val width = pigeonVar_list[1] as Long
+      val height = pigeonVar_list[2] as Long
+      val totalFrames = pigeonVar_list[3] as Long
+      val flashFrames = pigeonVar_list[4] as List<Long>
+      val beatNumbers = pigeonVar_list[5] as List<Long>
+      val audioWavPath = pigeonVar_list[6] as String
+      val outPath = pigeonVar_list[7] as String
+      val videoBitrate = pigeonVar_list[8] as Long
+      val audioBitrate = pigeonVar_list[9] as Long
+      return GuideVideoSpec(fps, width, height, totalFrames, flashFrames, beatNumbers, audioWavPath, outPath, videoBitrate, audioBitrate)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      fps,
+      width,
+      height,
+      totalFrames,
+      flashFrames,
+      beatNumbers,
+      audioWavPath,
+      outPath,
+      videoBitrate,
+      audioBitrate,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as GuideVideoSpec
+    return AudioApiPigeonUtils.deepEquals(this.fps, other.fps) && AudioApiPigeonUtils.deepEquals(this.width, other.width) && AudioApiPigeonUtils.deepEquals(this.height, other.height) && AudioApiPigeonUtils.deepEquals(this.totalFrames, other.totalFrames) && AudioApiPigeonUtils.deepEquals(this.flashFrames, other.flashFrames) && AudioApiPigeonUtils.deepEquals(this.beatNumbers, other.beatNumbers) && AudioApiPigeonUtils.deepEquals(this.audioWavPath, other.audioWavPath) && AudioApiPigeonUtils.deepEquals(this.outPath, other.outPath) && AudioApiPigeonUtils.deepEquals(this.videoBitrate, other.videoBitrate) && AudioApiPigeonUtils.deepEquals(this.audioBitrate, other.audioBitrate)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.fps)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.width)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.height)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.totalFrames)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.flashFrames)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.beatNumbers)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.audioWavPath)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.outPath)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.videoBitrate)
+    result = 31 * result + AudioApiPigeonUtils.deepHash(this.audioBitrate)
+    return result
+  }
+  override fun toString(): String {
+    return "GuideVideoSpec(fps=$fps, width=$width, height=$height, totalFrames=$totalFrames, flashFrames=$flashFrames, beatNumbers=$beatNumbers, audioWavPath=$audioWavPath, outPath=$outPath, videoBitrate=$videoBitrate, audioBitrate=$audioBitrate)"
   }
 }
 private open class AudioApiPigeonCodec : StandardMessageCodec() {
@@ -383,6 +486,11 @@ private open class AudioApiPigeonCodec : StandardMessageCodec() {
           MediaInfo.fromList(it)
         }
       }
+      132.toByte() -> {
+        (readValue(buffer) as? List<Any?>)?.let {
+          GuideVideoSpec.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -398,6 +506,10 @@ private open class AudioApiPigeonCodec : StandardMessageCodec() {
       }
       is MediaInfo -> {
         stream.write(131)
+        writeValue(stream, value.toList())
+      }
+      is GuideVideoSpec -> {
+        stream.write(132)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -469,6 +581,15 @@ interface AudioHostApi {
    */
   fun beginBackgroundWork(name: String): Long
   fun endBackgroundWork(token: Long)
+  /**
+   * Encodes the guide video (M7): H.264 at [GuideVideoSpec.fps] constant
+   * frame rate with the guide WAV as AAC audio, in an MPEG-4 container. Falls
+   * back to 720 × 1280 if the encoder refuses the requested size (the result
+   * says which size was written). Progress through AudioProgressApi (fraction
+   * of totalFrames written). Fails with `disk_full`, `encode_failed`,
+   * `cancelled`.
+   */
+  suspend fun encodeGuideVideo(jobId: String, spec: GuideVideoSpec): MediaInfo
 
   companion object {
     /** The codec used by AudioHostApi. */
@@ -697,6 +818,26 @@ interface AudioHostApi {
               AudioApiPigeonUtils.wrapError(exception)
             }
             reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.kickvolt.AudioHostApi.encodeGuideVideo$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val jobIdArg = args[0] as String
+            val specArg = args[1] as GuideVideoSpec
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.encodeGuideVideo(jobIdArg, specArg))
+              } catch (exception: Throwable) {
+                AudioApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
           }
         } else {
           channel.setMessageHandler(null)

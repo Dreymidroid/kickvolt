@@ -33,6 +33,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   static const String DEFAULT_CLICK_STYLE = 'DEFAULT_CLICK_STYLE';
   static const String DEFAULT_AUDIO_FORMAT = 'DEFAULT_AUDIO_FORMAT';
   static const String INCLUDE_PREVIEW_BY_DEFAULT = 'INCLUDE_PREVIEW_BY_DEFAULT';
+  static const String INCLUDE_VIDEO_BY_DEFAULT = 'INCLUDE_VIDEO_BY_DEFAULT';
   static const String MONO_GUIDE_TRACK = 'MONO_GUIDE_TRACK';
   static const String DEFAULT_SENSITIVITY = 'DEFAULT_SENSITIVITY';
   static const String ONBOARDING_DONE = 'ONBOARDING_DONE';
@@ -74,6 +75,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
       defaultAudioFormat: format ?? AudioFormat.wav,
       includePreviewByDefault:
           prefs.getBool(INCLUDE_PREVIEW_BY_DEFAULT) ?? false,
+      includeVideoByDefault: prefs.getBool(INCLUDE_VIDEO_BY_DEFAULT) ?? false,
       monoGuideTrack: prefs.getBool(MONO_GUIDE_TRACK) ?? false,
       defaultSensitivity: clampedSensitivity,
       onboardingDone: prefs.getBool(ONBOARDING_DONE) ?? false,
@@ -108,6 +110,10 @@ class SettingsRepositoryImpl implements SettingsRepository {
     await prefs.setBool(
       INCLUDE_PREVIEW_BY_DEFAULT,
       clamped.includePreviewByDefault,
+    );
+    await prefs.setBool(
+      INCLUDE_VIDEO_BY_DEFAULT,
+      clamped.includeVideoByDefault,
     );
     await prefs.setBool(MONO_GUIDE_TRACK, clamped.monoGuideTrack);
     await prefs.setDouble(DEFAULT_SENSITIVITY, clamped.defaultSensitivity);

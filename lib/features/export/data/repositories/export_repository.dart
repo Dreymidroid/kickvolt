@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/audio_math/wav_header.dart';
 import '../../../../core/audio_native/audio_native_client.dart';
+import '../../../../core/entitlements/entitlement_service.dart';
 import '../../../../core/storage/project_paths.dart';
 import '../../../projects/domain/entities/project.dart';
 import '../../domain/beat_pack_plan.dart';
@@ -13,12 +14,16 @@ import '../../domain/entities/beat_pack.dart';
 import '../../domain/entities/export_failure.dart';
 import '../../domain/entities/export_options.dart';
 import '../export_isolate_runner.dart';
+import '../guide_video_native.dart';
 
 /// Safety margin added to disk space pre-checks: 20 MB (§4.7).
 const int kExportDiskMarginBytes = 20 * 1024 * 1024;
 
 /// Maximum number of finished beat-pack folders kept per project (§4.6).
 const int kMaxSavedPacksPerProject = 3;
+
+/// Progress weight of the guide video relative to one audio file (M7 §6).
+const double kGuideVideoProgressWeight = 2.0;
 
 /// Runs a [BeatPackPlan]: renders into `exports/<packId>/*.part`, encodes if
 /// M4A, renames, verifies every file from disk, and returns the finished
@@ -43,12 +48,17 @@ class ExportRepositoryImpl implements ExportRepository {
   ExportRepositoryImpl({
     required this._audio,
     required this._paths,
+    EntitlementService? entitlements,
     DateTime Function()? clock,
     this.renderHookForTesting,
-  }) : _clock = clock ?? DateTime.now;
+  }) : _entitlements = entitlements ?? const UnlimitedEntitlementService(),
+       _clock = clock ?? DateTime.now;
 
   final AudioNative _audio;
   final Future<ProjectPaths> Function() _paths;
+
+  /// Gates the guide video (`hasGuideVideo`); the only entitlement check here.
+  final EntitlementService _entitlements;
   final DateTime Function() _clock;
 
   /// Optional test hook invoked right before each file step is rendered.
@@ -59,13 +69,21 @@ class ExportRepositoryImpl implements ExportRepository {
   @override
   Future<BeatPack> export(
     Project project,
-    ExportOptions options, {
+    ExportOptions requestedOptions, {
     required ExportCancelToken cancel,
     void Function(ExportProgress)? onProgress,
   }) async {
     if (cancel.isCancelled) {
       throw const ExportCancelledException();
     }
+
+    // The guide video is gated by `hasGuideVideo` only (M7 §6).
+    var options = requestedOptions;
+    if (options.includeVideo &&
+        !(await _entitlements.current()).hasGuideVideo) {
+      options = options.copyWith(includeVideo: false);
+    }
+    if (cancel.isCancelled) throw const ExportCancelledException();
 
     final projectPaths = await _paths();
     final songWavPath = projectPaths.songWav(project.id);
@@ -138,19 +156,26 @@ class ExportRepositoryImpl implements ExportRepository {
     try {
       await packDir.create(recursive: true);
 
-      final stepCount = math.max(1, plan.files.length);
       final fileFractions = List<double>.filled(plan.files.length, 0.0);
       final fileCompleted = List<bool>.filled(plan.files.length, false);
+      // Weight each step by its work. Audio steps all cover the song's frames
+      // (equal weights); the video draws and H.264-encodes every frame and
+      // AAC-encodes the guide, so it gets [kGuideVideoProgressWeight].
+      final weights = [
+        for (final f in plan.files)
+          f.kind == ExportFileKind.video ? kGuideVideoProgressWeight : 1.0,
+      ];
+      final totalWeight = weights.fold<double>(0, (a, b) => a + b);
 
       void emitProgress(int activeIndex, String stepText) {
         if (onProgress == null || cancel.isCancelled) return;
-        // Weight each step by frames (all steps share the song's frameCount,
-        // so equal frame weights across planned files).
         var total = 0.0;
-        for (final f in fileFractions) {
-          total += f.clamp(0.0, 1.0);
+        for (var i = 0; i < fileFractions.length; i++) {
+          total += fileFractions[i].clamp(0.0, 1.0) * weights[i];
         }
-        final overall = (total / stepCount).clamp(0.0, 1.0);
+        final overall = totalWeight <= 0
+            ? 0.0
+            : (total / totalWeight).clamp(0.0, 1.0);
         onProgress(
           ExportProgress(
             overallFraction: overall,
@@ -182,6 +207,69 @@ class ExportRepositoryImpl implements ExportRepository {
       final stagedPartPaths = <String>[];
       final finalPaths = <String>[];
 
+      // The guide WAV the video is encoded from (M7 §6): the staged guide
+      // `.part` (WAV pack) or the transient guide WAV (M4A pack).
+      String? guideWavForVideo;
+      // M4A pack with video: the guide's M4A encode waits until the video is
+      // done, so its transient WAV can feed the video first.
+      ({int index, String transientWav, String stagedPartPath})? deferredGuide;
+
+      Future<void> encodeM4aStep({
+        required int index,
+        required ExportFileKind kind,
+        required String wavInput,
+        required String outPath,
+        required double baseFrac,
+        required double spanFrac,
+        String? transientWavToDelete,
+      }) async {
+        if (cancel.isCancelled) throw const ExportCancelledException();
+        currentKind = kind;
+        final encodeText = _stepTextFor(
+          kind,
+          options.format,
+          plan.clickCount,
+          encodingM4a: true,
+        );
+        emitProgress(index, encodeText);
+        final jobId = 'm4a-$stamp-${kind.name}';
+        Future<void> cancelNative() => _audio.cancel(jobId);
+        cancel.addHandler(cancelNative);
+        try {
+          await _audio.encodeM4a(
+            jobId: jobId,
+            wavPath: wavInput,
+            outPath: outPath,
+            onProgress: (f) {
+              fileFractions[index] = baseFrac + f.clamp(0.0, 1.0) * spanFrac;
+              emitProgress(index, encodeText);
+            },
+          );
+        } finally {
+          cancel.removeHandler(cancelNative);
+          if (transientWavToDelete != null) {
+            try {
+              final f = File(transientWavToDelete);
+              if (await f.exists()) await f.delete();
+            } catch (_) {}
+          }
+        }
+      }
+
+      void markDone(int index) {
+        fileFractions[index] = 1.0;
+        fileCompleted[index] = true;
+        emitProgress(
+          index,
+          _stepTextFor(
+            plan.files[index].kind,
+            options.format,
+            plan.clickCount,
+            encodingM4a: options.format == AudioFormat.m4a,
+          ),
+        );
+      }
+
       for (var i = 0; i < plan.files.length; i++) {
         if (cancel.isCancelled) throw const ExportCancelledException();
 
@@ -194,6 +282,58 @@ class ExportRepositoryImpl implements ExportRepository {
 
         if (renderHookForTesting != null) {
           await renderHookForTesting!(step);
+        }
+
+        if (step.kind == ExportFileKind.video) {
+          final video = plan.guideVideo;
+          final audioWav = guideWavForVideo;
+          if (video == null || audioWav == null) {
+            throw StateError('The guide video needs the guide track first.');
+          }
+          final stepText = _stepTextFor(
+            step.kind,
+            options.format,
+            plan.clickCount,
+            encodingM4a: false,
+          );
+          emitProgress(i, stepText);
+          final jobId = 'video-$stamp';
+          Future<void> cancelNative() => _audio.cancel(jobId);
+          cancel.addHandler(cancelNative);
+          try {
+            await _audio.encodeGuideVideo(
+              jobId: jobId,
+              spec: guideVideoSpecFor(
+                video,
+                audioWavPath: audioWav,
+                outPath: stagedPartPath,
+              ),
+              onProgress: (f) {
+                fileFractions[i] = f.clamp(0.0, 1.0);
+                emitProgress(i, stepText);
+              },
+            );
+          } finally {
+            cancel.removeHandler(cancelNative);
+          }
+          markDone(i);
+
+          final guide = deferredGuide;
+          if (guide != null) {
+            deferredGuide = null;
+            guideWavForVideo = null;
+            await encodeM4aStep(
+              index: guide.index,
+              kind: ExportFileKind.guide,
+              wavInput: guide.transientWav,
+              outPath: guide.stagedPartPath,
+              baseFrac: 0.5,
+              spanFrac: 0.5,
+              transientWavToDelete: guide.transientWav,
+            );
+            markDone(guide.index);
+          }
+          continue;
         }
 
         if (options.format == AudioFormat.wav) {
@@ -222,29 +362,35 @@ class ExportRepositoryImpl implements ExportRepository {
               emitProgress(i, stepText);
             },
           );
+          if (step.kind == ExportFileKind.guide) {
+            guideWavForVideo = stagedPartPath;
+          }
+        } else if (step.kind == ExportFileKind.song) {
+          // M4A song: encode straight from song.wav.
+          await encodeM4aStep(
+            index: i,
+            kind: step.kind,
+            wavInput: songWavPath,
+            outPath: stagedPartPath,
+            baseFrac: 0.0,
+            spanFrac: 1.0,
+          );
         } else {
-          // M4A: render intermediate WAV (for guide and preview; for song we
-          // can encode straight from song.wav, or render intermediate WAV for
-          // guide/preview and delete it right after encoding).
-          final String wavInputForEncode;
-          String? transientWavToDelete;
-
-          if (step.kind == ExportFileKind.song) {
-            wavInputForEncode = songWavPath;
-          } else {
-            final transientWav = p.join(
-              packDirPath,
-              '_transient_${step.kind.name}.wav',
-            );
-            transientWavToDelete = transientWav;
-            final renderText = _stepTextFor(
-              step.kind,
-              options.format,
-              plan.clickCount,
-              encodingM4a: false,
-            );
-            emitProgress(i, renderText);
-
+          // M4A guide/preview: render an intermediate WAV, encode it, delete
+          // it. With a guide video, the guide's encode waits for the video
+          // (guide WAV → video → guide M4A → WAV deleted).
+          final transientWav = p.join(
+            packDirPath,
+            '_transient_${step.kind.name}.wav',
+          );
+          final renderText = _stepTextFor(
+            step.kind,
+            options.format,
+            plan.clickCount,
+            encodingM4a: false,
+          );
+          emitProgress(i, renderText);
+          try {
             await runExportStepInIsolate(
               kind: step.kind,
               songWavPath: songWavPath,
@@ -259,58 +405,43 @@ class ExportRepositoryImpl implements ExportRepository {
                 emitProgress(i, renderText);
               },
             );
-            wavInputForEncode = transientWav;
+          } catch (_) {
+            try {
+              final f = File(transientWav);
+              if (await f.exists()) await f.delete();
+            } catch (_) {}
+            rethrow;
           }
+          fileFractions[i] = 0.5;
 
-          if (cancel.isCancelled) throw const ExportCancelledException();
-
-          final encodeText = _stepTextFor(
-            step.kind,
-            options.format,
-            plan.clickCount,
-            encodingM4a: true,
-          );
-          final baseFrac = step.kind == ExportFileKind.song ? 0.0 : 0.5;
-          final spanFrac = step.kind == ExportFileKind.song ? 1.0 : 0.5;
-          emitProgress(i, encodeText);
-
-          final jobId = 'm4a-$stamp-${step.kind.name}';
-          Future<void> cancelNative() => _audio.cancel(jobId);
-          cancel.addHandler(cancelNative);
-          try {
-            await _audio.encodeM4a(
-              jobId: jobId,
-              wavPath: wavInputForEncode,
-              outPath: stagedPartPath,
-              onProgress: (f) {
-                fileFractions[i] = baseFrac + f.clamp(0.0, 1.0) * spanFrac;
-                emitProgress(i, encodeText);
-              },
+          if (step.kind == ExportFileKind.guide && plan.guideVideo != null) {
+            guideWavForVideo = transientWav;
+            deferredGuide = (
+              index: i,
+              transientWav: transientWav,
+              stagedPartPath: stagedPartPath,
             );
-          } finally {
-            cancel.removeHandler(cancelNative);
-            if (transientWavToDelete != null) {
-              try {
-                final f = File(transientWavToDelete);
-                if (await f.exists()) await f.delete();
-              } catch (_) {}
-            }
+            emitProgress(i, renderText);
+            continue;
           }
+
+          await encodeM4aStep(
+            index: i,
+            kind: step.kind,
+            wavInput: transientWav,
+            outPath: stagedPartPath,
+            baseFrac: 0.5,
+            spanFrac: 0.5,
+            transientWavToDelete: transientWav,
+          );
         }
 
-        fileFractions[i] = 1.0;
-        fileCompleted[i] = true;
-        emitProgress(
-          i,
-          _stepTextFor(
-            step.kind,
-            options.format,
-            plan.clickCount,
-            encodingM4a: options.format == AudioFormat.m4a,
-          ),
-        );
+        markDone(i);
       }
 
+      if (deferredGuide != null) {
+        throw StateError('Guide track was never encoded.');
+      }
       if (cancel.isCancelled) throw const ExportCancelledException();
 
       // Atomic commit: rename every staged `.part` file to its final name, then
@@ -326,6 +457,34 @@ class ExportRepositoryImpl implements ExportRepository {
         final finalFile = File(finalPath);
         final byteSize = await finalFile.length();
         final int verifiedFrames;
+
+        if (step.kind == ExportFileKind.video) {
+          final media = await _audio.probeMedia(finalPath);
+          final problem = guideVideoVerificationProblem(
+            media,
+            plan: plan.guideVideo!,
+            sampleRate: sourceInfo.sampleRate,
+            frameCount: sourceInfo.frameCount,
+            guideChannels: step.channels,
+          );
+          if (problem != null) {
+            throw AudioNativeException(AudioErrorKind.encodeFailed, problem);
+          }
+          exportedFiles.add(
+            ExportedFile(
+              path: finalPath,
+              kind: step.kind,
+              displayName: step.fileName,
+              frameCount: sourceInfo.frameCount,
+              byteSize: byteSize,
+              clickCount: step.clickCount,
+              flashCount: plan.guideVideo!.flashCount,
+              videoWidth: media.videoWidth,
+              videoHeight: media.videoHeight,
+            ),
+          );
+          continue;
+        }
 
         if (options.format == AudioFormat.wav) {
           final info = await readWavInfo(finalFile);
@@ -395,10 +554,13 @@ class ExportRepositoryImpl implements ExportRepository {
         );
       }
       if (e.kind == AudioErrorKind.encodeFailed ||
-          e.kind == AudioErrorKind.unsupportedFormat) {
+          e.kind == AudioErrorKind.unsupportedFormat ||
+          (currentKind == ExportFileKind.video &&
+              e.kind == AudioErrorKind.noAudioTrack)) {
         throw ExportFailureException(
           ExportFailure(
             kind: ExportFailureKind.encodeFailed,
+            failedFile: currentKind,
             detail: e.message,
           ),
         );
@@ -508,7 +670,9 @@ class ExportRepositoryImpl implements ExportRepository {
       for (final f in files) {
         final name = p.basename(f.path);
         if (name.endsWith('.m4a')) format = AudioFormat.m4a;
-        final kind = name.contains('_beats.')
+        final kind = name.endsWith('_guide.mp4')
+            ? ExportFileKind.video
+            : name.contains('_beats.')
             ? ExportFileKind.guide
             : name.contains('_preview.')
             ? ExportFileKind.preview
@@ -573,6 +737,7 @@ class ExportRepositoryImpl implements ExportRepository {
         format == AudioFormat.m4a ? 'Encoding song…' : 'Copying song…',
       ExportFileKind.preview =>
         encodingM4a ? 'Encoding preview mix…' : 'Mixing preview…',
+      ExportFileKind.video => 'Making the guide video…',
     };
   }
 

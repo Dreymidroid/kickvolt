@@ -32,6 +32,9 @@ abstract class AppSettings with _$AppSettings {
     @Default(ClickStyle.snap) ClickStyle defaultClickStyle,
     @Default(AudioFormat.wav) AudioFormat defaultAudioFormat,
     @Default(false) bool includePreviewByDefault,
+
+    /// "Guide video in packs" (M7 §7): the Export screen's video default.
+    @Default(false) bool includeVideoByDefault,
     @Default(false) bool monoGuideTrack,
 
     /// Default beat-detection sensitivity for newly created projects (`0.25`

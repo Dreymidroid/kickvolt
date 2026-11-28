@@ -1,11 +1,13 @@
 export 'bloc/export_cubit.dart';
 export 'data/export_isolate_runner.dart';
+export 'data/guide_video_native.dart';
 export 'data/repositories/export_repository.dart';
 export 'data/share_service.dart';
 export 'domain/beat_pack_plan.dart';
 export 'domain/entities/beat_pack.dart';
 export 'domain/entities/export_failure.dart';
 export 'domain/entities/export_options.dart';
+export 'domain/guide_video_plan.dart';
 export 'presentation/pages/export_screen.dart';
 export 'presentation/widgets/export_failed_sheet.dart';
 export 'presentation/widgets/export_options_view.dart';

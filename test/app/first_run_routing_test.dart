@@ -102,7 +102,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Mark once. Export a beat pack.'), findsOneWidget);
     expect(find.text('PRO'), findsNothing);
-    expect(find.text('Video'), findsNothing);
+    // M7 is in: the beat-pack card shows the Video tile (no PRO badge).
+    expect(find.text('Video'), findsOneWidget);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Let KickVolt reach your music.'), findsOneWidget);

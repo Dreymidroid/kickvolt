@@ -241,6 +241,14 @@ class _SettingsBody extends StatelessWidget {
               onTap: () => _pickAudioFormat(context),
             ),
             const _SettingsDivider(),
+            // M7: the guide video is always H.264 MP4 (read-only).
+            const _SettingsPickerRow(
+              label: 'Video format',
+              value: 'MP4',
+              monoValue: true,
+              showChevron: false,
+            ),
+            const _SettingsDivider(),
             _SettingsToggleRow(
               label: 'Mono guide track (smaller file)',
               value: settings.monoGuideTrack,
@@ -251,6 +259,12 @@ class _SettingsBody extends StatelessWidget {
               label: 'Preview mix in packs',
               value: settings.includePreviewByDefault,
               onChanged: cubit.setIncludePreviewByDefault,
+            ),
+            const _SettingsDivider(),
+            _SettingsToggleRow(
+              label: 'Guide video in packs',
+              value: settings.includeVideoByDefault,
+              onChanged: cubit.setIncludeVideoByDefault,
             ),
             const _SettingsDivider(),
             _SettingsPickerRow(
@@ -400,14 +414,16 @@ class _SettingsPickerRow extends StatelessWidget {
     this.value,
     this.monoValue = false,
     this.showChevron = true,
-    required this.onTap,
+    this.onTap,
   });
 
   final String label;
   final String? value;
   final bool monoValue;
   final bool showChevron;
-  final VoidCallback onTap;
+
+  /// Null for a read-only row.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
