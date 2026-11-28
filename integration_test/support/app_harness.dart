@@ -207,6 +207,14 @@ class E2EApp {
     return tester.element(f).read<ExportCubit>();
   }
 
+  /// The export cubit's state while the Exporting view is up, else null.
+  ExportExporting? exportingState(WidgetTester tester) {
+    final f = find.byType(ExportingView);
+    if (f.evaluate().isEmpty) return null;
+    final s = tester.element(f).read<ExportCubit>().state;
+    return s is ExportExporting ? s : null;
+  }
+
   /// Editor › Back to projects, then waits for Home.
   Future<void> backToHome(WidgetTester tester) async {
     await tester.tap(bySemanticsLabel('Back to projects'));

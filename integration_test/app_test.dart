@@ -648,6 +648,121 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
+  // I10 — guide video (M7). Checked with probeMedia and by decoding its
+  // audio track. The app has no API that decodes video frames, so flash
+  // frames are not checked pixel by pixel here (host tests cover the plan).
+  // ---------------------------------------------------------------------
+  testWidgets('I10 export guide video', (tester) async {
+    await app.launch(tester);
+    final fx = FixtureAudio.generate();
+    final src = await app.writeScratch('fx_video.wav', fx.wavBytes());
+    final s = await app.importToEditor(tester, src);
+    final id = s.project.id;
+    await tester.tap(find.text('Export'));
+    await pumpUntilFound(tester, find.text('Export beat pack'));
+    await tapWhenStable(tester, bySemanticsLabel('Include guide video'));
+    await pumpUntilFound(tester, find.text('Export 3 files'));
+    final options = (app.exportCubit(tester).state as ExportEditing).options;
+    expect(options.includeVideo, isTrue);
+    final planned = planBeatPack(s.project, options);
+    final videoPlan = planned.guideVideo!;
+    final song = await readPcm16(app.paths.songWav(id));
+    expect(
+      videoPlan.totalFrames,
+      guideVideoTotalFrames(
+        frameCount: song.frames,
+        sampleRate: song.info.sampleRate,
+      ),
+    );
+
+    final sw = Stopwatch()..start();
+    await tester.tap(find.text('Export 3 files'));
+    await pumpUntilFound(
+      tester,
+      find.text('Share'),
+      timeout: const Duration(minutes: 5),
+    );
+    final exportMs = sw.elapsedMilliseconds;
+    final pack = (app.exportCubit(tester).state as ExportDone).pack;
+    final videoPath = pack.files
+        .firstWhere((f) => f.kind == ExportFileKind.video)
+        .path;
+    final guideFile = pack.files.firstWhere(
+      (f) => f.kind == ExportFileKind.guide,
+    );
+    final guide = await readPcm16(guideFile.path);
+
+    final probe = await app.audio.probeMedia(videoPath);
+    final songUs = song.frames * 1000000 ~/ song.info.sampleRate;
+    final videoUs = probe.videoDurationUs ?? probe.durationUs;
+
+    final decPath = app.scratchPath('video_audio.dec.wav');
+    await app.audio.decodeToWav(
+      jobId: 'dec-video-audio',
+      inputPath: videoPath,
+      outputPath: decPath,
+    );
+    final dec = await readPcm16(decPath);
+    final lag = crossCorrelationLag(
+      monoMix(dec.pcm, dec.channels, count: 4 * song.info.sampleRate),
+      monoMix(guide.pcm, guide.channels, count: 4 * song.info.sampleRate),
+    );
+    report(
+      'I10',
+      'hasVideo=${probe.hasVideo} ${probe.videoWidth}x${probe.videoHeight} '
+          'videoFrames=${probe.videoFrameCount}/${videoPlan.totalFrames} '
+          'videoUs=$videoUs songUs=$songUs diffUs=${videoUs - songUs} '
+          'audio=${probe.sampleRate}/${probe.channels} '
+          'guide=${guide.info.sampleRate}/${guide.channels} '
+          'flashes=${videoPlan.flashCount} decodedAudio=${dec.frames}f '
+          'guideFrames=${guide.frames}f audioLag=$lag '
+          'bytes=${await File(videoPath).length()} export=${exportMs}ms',
+    );
+    expect(probe.hasVideo, isTrue);
+    expect(probe.videoFrameCount, videoPlan.totalFrames);
+    expect((videoUs - songUs).abs(), lessThanOrEqualTo(33334));
+    expect(probe.sampleRate, guide.info.sampleRate);
+    expect(probe.channels, guide.channels);
+    expect(dec.info.sampleRate, guide.info.sampleRate);
+    expect(dec.channels, guide.channels);
+    // Same AAC priming/padding as the M4A exports (I2/I7).
+    expect((dec.frames - guide.frames).abs(), lessThanOrEqualTo(4096));
+  });
+
+  testWidgets('I10 cancel during guide video encode', (tester) async {
+    await app.launch(tester);
+    final fx = FixtureAudio.generate(seconds: 90);
+    final src = await app.writeScratch('fx_video_cancel.wav', fx.wavBytes());
+    final s = await app.importToEditor(
+      tester,
+      src,
+      timeout: const Duration(minutes: 3),
+    );
+    final id = s.project.id;
+    await tester.tap(find.text('Export'));
+    await pumpUntilFound(tester, find.text('Export beat pack'));
+    await tapWhenStable(tester, bySemanticsLabel('Include guide video'));
+    await pumpUntilFound(tester, find.text('Export 3 files'));
+    await tester.tap(find.text('Export 3 files'));
+    // Wait until the video file itself is being written.
+    await pumpUntil(tester, () {
+      final st = app.exportingState(tester);
+      return st != null &&
+          st.progress.files.any(
+            (f) => f.kind == ExportFileKind.video && f.fraction > 0,
+          );
+    }, reason: 'video encode in progress');
+    await tester.tap(find.text('Cancel'));
+    await pumpUntilFound(tester, find.text('Export 3 files'));
+    await pumpUntil(tester, () async {
+      final d = Directory(app.paths.exportsDir(id));
+      if (!await d.exists()) return true;
+      return await d.list().where((e) => e is Directory).isEmpty;
+    }, reason: 'cancelled pack folder removed');
+    report('I10 cancel', 'cancelled mid-video; no pack folder left');
+  });
+
+  // ---------------------------------------------------------------------
   // I11 — first run
   // ---------------------------------------------------------------------
   testWidgets('I11 first run: onboarding, second launch, coach marks once', (

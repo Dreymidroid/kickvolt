@@ -120,6 +120,13 @@ class SaveRecordingAudioNative implements AudioNative {
   );
 
   @override
+  Future<MediaInfo> encodeGuideVideo({
+    required String jobId,
+    required GuideVideoSpec spec,
+    void Function(double fraction)? onProgress,
+  }) => real.encodeGuideVideo(jobId: jobId, spec: spec, onProgress: onProgress);
+
+  @override
   Future<void> endBackgroundWork(int token) => real.endBackgroundWork(token);
 
   @override
