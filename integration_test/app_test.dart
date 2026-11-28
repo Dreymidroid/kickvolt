@@ -157,8 +157,17 @@ void main() {
             'spread=${spreadMs.toStringAsFixed(2)}ms importTotal=${importMs}ms',
       );
 
-      // Priming + padding of AAC is at most a few 1024-sample frames.
-      expect(frameDiff.abs(), lessThanOrEqualTo(4096));
+      if (container == 'm4a') {
+        // The export writes an edit list (encoder delay + padding) and the
+        // decoder trims it: the round trip is sample-exact in length and
+        // position.
+        expect(frameDiff, 0, reason: 'decodedFrames=${song.frames}');
+        expect(lag.lag, 0, reason: '$lag');
+      } else {
+        // Raw ADTS can't carry gapless metadata: priming + padding stay,
+        // at most a few 1024-sample frames.
+        expect(frameDiff.abs(), lessThanOrEqualTo(4096));
+      }
       expect(lag.normalised, greaterThan(0.9), reason: '$lag');
       expect((bpm - 120).abs(), lessThanOrEqualTo(1), reason: 'bpm=$bpm');
       // A constant shift is the decoder's priming; ±1 ms around it.
@@ -509,6 +518,12 @@ void main() {
       expect(songLag.normalised, greaterThan(0.9));
       expect(guideLag.normalised, greaterThan(0.5));
       expect((songLag.lag - guideLag.lag).abs(), lessThanOrEqualTo(1));
+      // With the edit list both files also line up with song.wav itself:
+      // no encoder priming left, and exactly the song's length.
+      expect(songLag.lag, 0, reason: '$songLag');
+      expect(guideLag.lag, 0, reason: '$guideLag');
+      expect(decSong.frames, songWav.frames);
+      expect(decGuide.frames, songWav.frames);
     });
   }
 
@@ -725,8 +740,10 @@ void main() {
     expect(probe.channels, guide.channels);
     expect(dec.info.sampleRate, guide.info.sampleRate);
     expect(dec.channels, guide.channels);
-    // Same AAC priming/padding as the M4A exports (I2/I7).
-    expect((dec.frames - guide.frames).abs(), lessThanOrEqualTo(4096));
+    // The video's audio track carries the same edit list as the M4A
+    // exports: decoded, it is exactly the guide track.
+    expect(dec.frames, guide.frames);
+    expect(lag.lag, 0, reason: '$lag');
   });
 
   testWidgets('I10 cancel during guide video encode', (tester) async {
