@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import '../audio_math/mp4_edit_list.dart';
+import '../audio_math/wav_header.dart';
 import 'audio_api.g.dart';
 
 export 'audio_api.g.dart'
@@ -112,11 +115,17 @@ abstract interface class AudioNative {
 }
 
 class AudioNativeClient implements AudioNative, AudioProgressApi {
-  AudioNativeClient({AudioHostApi? host}) : _host = host ?? AudioHostApi() {
+  AudioNativeClient({AudioHostApi? host, bool? addAacPrimingEditList})
+    : _host = host ?? AudioHostApi(),
+      _addPriming = addAacPrimingEditList ?? Platform.isAndroid {
     AudioProgressApi.setUp(this);
   }
 
   final AudioHostApi _host;
+
+  /// Android only: `MediaMuxer` writes no edit list, so AAC files would start
+  /// with the encoder priming. iOS (AVAssetWriter) writes its own.
+  final bool _addPriming;
   final _progress = <String, void Function(double)>{};
 
   @override
@@ -172,9 +181,10 @@ class AudioNativeClient implements AudioNative, AudioProgressApi {
   }) async {
     if (onProgress != null) _progress[jobId] = onProgress;
     try {
-      return await _guard(
+      final info = await _guard(
         () => _host.encodeM4a(jobId, wavPath, outPath, bitrate),
       );
+      return await _withPriming(info, outPath: outPath, wavPath: wavPath);
     } finally {
       _progress.remove(jobId);
     }
@@ -204,10 +214,41 @@ class AudioNativeClient implements AudioNative, AudioProgressApi {
   }) async {
     if (onProgress != null) _progress[jobId] = onProgress;
     try {
-      return await _guard(() => _host.encodeGuideVideo(jobId, spec));
+      final info = await _guard(() => _host.encodeGuideVideo(jobId, spec));
+      return await _withPriming(
+        info,
+        outPath: spec.outPath,
+        wavPath: spec.audioWavPath,
+      );
     } finally {
       _progress.remove(jobId);
     }
+  }
+
+  /// Adds the AAC priming edit list to [outPath] (see [addAudioPrimingEditList])
+  /// and re-probes it, so decoders and editors skip the encoder delay.
+  Future<MediaInfo> _withPriming(
+    MediaInfo info, {
+    required String outPath,
+    required String wavPath,
+  }) async {
+    if (!_addPriming) return info;
+    try {
+      final wav = await readWavInfo(File(wavPath));
+      final result = await addAudioPrimingEditList(
+        outPath,
+        primingFrames: kAndroidAacPrimingFrames,
+        validFrames: wav.frameCount,
+        sampleRate: wav.sampleRate,
+      );
+      if (result != EditListResult.added) return info;
+    } on Object catch (e) {
+      throw AudioNativeException(
+        AudioErrorKind.encodeFailed,
+        'Could not finish the AAC file: $e',
+      );
+    }
+    return probeMedia(outPath);
   }
 
   Future<T> _guard<T>(Future<T> Function() call) async {

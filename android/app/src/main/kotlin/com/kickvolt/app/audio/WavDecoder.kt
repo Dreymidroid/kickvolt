@@ -7,6 +7,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.StatFs
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -60,6 +61,15 @@ class WavDecoder(
             val mime = inFormat.getString(MediaFormat.KEY_MIME)!!
             val durationUs =
                 if (inFormat.containsKey(MediaFormat.KEY_DURATION)) inFormat.getLong(MediaFormat.KEY_DURATION) else 0L
+            // Gapless metadata: MPEG4Extractor turns an MP4 edit list (or
+            // iTunSMPB) into encoder-delay / encoder-padding, in frames.
+            // Whether MediaCodec trims them depends on the release and codec
+            // (Codec2's AAC decoder on Android 14 does; older/vendor ones may
+            // not), so we zero them for the codec and trim exactly once here.
+            val encoderDelay = inFormat.getIntegerOrNull(KEY_ENCODER_DELAY)?.coerceAtLeast(0) ?: 0
+            val encoderPadding = inFormat.getIntegerOrNull(KEY_ENCODER_PADDING)?.coerceAtLeast(0) ?: 0
+            inFormat.setInteger(KEY_ENCODER_DELAY, 0)
+            inFormat.setInteger(KEY_ENCODER_PADDING, 0)
 
             checkFreeSpace(output, inFormat, durationUs)
 
@@ -82,7 +92,7 @@ class WavDecoder(
             output.parentFile?.mkdirs()
             return FileOutputStream(output).channel.use { channel ->
                 try {
-                    pump(extractor, codec, channel, durationUs)
+                    pump(extractor, codec, channel, durationUs, mime, encoderDelay, encoderPadding)
                 } finally {
                     try { codec.stop() } catch (_: Exception) {}
                     codec.release()
@@ -98,6 +108,9 @@ class WavDecoder(
         codec: MediaCodec,
         channel: FileChannel,
         durationUs: Long,
+        mime: String,
+        encoderDelay: Int,
+        encoderPadding: Int,
     ): DecodeResult {
         channel.write(ByteBuffer.allocate(WAV_HEADER_BYTES))
 
@@ -109,6 +122,8 @@ class WavDecoder(
         var outChannels = 0
         var isFloat = false
         var dataBytes = 0L
+        var decodedFrames = 0L
+        var framesToSkip = encoderDelay.toLong()
         var lastReported = -1.0
         var scratch = ByteBuffer.allocate(0).order(ByteOrder.LITTLE_ENDIAN)
 
@@ -151,13 +166,17 @@ class WavDecoder(
                     val src = buf.slice().order(ByteOrder.nativeOrder())
                     val bytesPerSample = if (isFloat) 4 else 2
                     val frames = info.size / (bytesPerSample * srcChannels)
-                    val needed = frames * outChannels * 2
+                    decodedFrames += frames
+                    // Drop the encoder delay at the start.
+                    val skip = minOf(framesToSkip, frames.toLong()).toInt()
+                    framesToSkip -= skip
+                    val needed = (frames - skip) * outChannels * 2
                     if (scratch.capacity() < needed) {
                         scratch = ByteBuffer.allocate(needed).order(ByteOrder.LITTLE_ENDIAN)
                     }
                     scratch.clear()
                     // >2 channels: keep the first two (front left/right).
-                    for (f in 0 until frames) {
+                    for (f in skip until frames) {
                         for (c in 0 until outChannels) {
                             val i = f * srcChannels + c
                             val s = if (isFloat) {
@@ -184,6 +203,19 @@ class WavDecoder(
                 }
             }
         }
+
+        // Drop the encoder padding at the end (never below one frame).
+        val frameBytes = 2L * maxOf(outChannels, 1)
+        val padBytes = minOf(encoderPadding.toLong() * frameBytes, maxOf(dataBytes - frameBytes, 0L))
+        if (padBytes > 0) {
+            dataBytes -= padBytes
+            channel.truncate(WAV_HEADER_BYTES + dataBytes)
+        }
+        Log.i(
+            TAG,
+            "decoded $mime: $decodedFrames frames, encoder-delay=$encoderDelay " +
+                "encoder-padding=$encoderPadding, wrote ${dataBytes / frameBytes} frames",
+        )
 
         if (sampleRate == 0 || dataBytes == 0L) {
             throw FlutterError("decode_failed", "The decoder produced no audio.")
@@ -225,7 +257,13 @@ class WavDecoder(
         if (containsKey(key)) getInteger(key) else null
 
     companion object {
+        private const val TAG = "KvWavDecoder"
         private const val TIMEOUT_US = 10_000L
+
+        // MediaFormat.KEY_ENCODER_DELAY / KEY_ENCODER_PADDING (API 30). The
+        // extractor sets the same string keys on older releases too.
+        private const val KEY_ENCODER_DELAY = "encoder-delay"
+        private const val KEY_ENCODER_PADDING = "encoder-padding"
         private const val WAV_HEADER_BYTES = 44
         private const val SPACE_MARGIN = 20L * 1024 * 1024
 
